@@ -40,6 +40,75 @@
   --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+[data-theme="dark"] {
+  --bg-main: #0B0F19;
+  --bg-card: #111827;
+  --bg-card-hover: #1F2937;
+  
+  --primary: #3B82F6;
+  --primary-hover: #60A5FA;
+  --primary-light: rgba(59, 130, 246, 0.15);
+  --primary-border: #1E3A8A;
+
+  --text-main: #F9FAFB;
+  --text-muted: #9CA3AF;
+  --text-light: #6B7280;
+
+  --border: #1F2937;
+  --border-light: #182234;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.7);
+}
+
+[data-theme="dark"] .navbar {
+  background: rgba(17, 24, 39, 0.95);
+  border-bottom-color: #1F2937;
+}
+
+[data-theme="dark"] .stat-card,
+[data-theme="dark"] .quick-action-item,
+[data-theme="dark"] .table-container,
+[data-theme="dark"] .btn-secondary,
+[data-theme="dark"] .form-input,
+[data-theme="dark"] .form-select,
+[data-theme="dark"] .form-textarea,
+[data-theme="dark"] .modal-content {
+  background: #111827;
+  border-color: #1F2937;
+  color: #F9FAFB;
+}
+
+[data-theme="dark"] .btn-secondary:hover {
+  background: #1F2937;
+  color: #60A5FA;
+}
+
+[data-theme="dark"] .custom-table th {
+  background: #182234;
+  color: #9CA3AF;
+  border-bottom-color: #1F2937;
+}
+
+[data-theme="dark"] .custom-table td {
+  border-bottom-color: #1F2937;
+  color: #F9FAFB;
+}
+
+[data-theme="dark"] .custom-table tbody tr:hover td {
+  background: #1F2937;
+}
+
+[data-theme="dark"] .history-item {
+  background: #182234;
+}
+
+[data-theme="dark"] .history-item:hover {
+  background: #1F2937;
+}
+
 * {
   margin: 0;
   padding: 0;
