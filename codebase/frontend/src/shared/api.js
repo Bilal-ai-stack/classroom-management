@@ -2,10 +2,14 @@ const BASE_URL = '/api';
 
 export async function apiRequest(endpoint, options = {}) {
   const url = `${BASE_URL}${endpoint}`;
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(options.headers || {})
-  };
+  const isFormData = options.body instanceof FormData;
+
+  const headers = isFormData
+    ? { ...(options.headers || {}) }
+    : {
+        'Content-Type': 'application/json',
+        ...(options.headers || {})
+      };
 
   try {
     const res = await fetch(url, { ...options, headers });
@@ -66,4 +70,23 @@ export const attendanceApi = {
     if (className && className !== 'All Classes') params.append('class_name', className);
     return apiRequest(`/reports/attendance?${params.toString()}`);
   }
+};
+
+// Phase 3 Photo-Assisted Attendance API endpoints
+export const photoApi = {
+  detectFaces: (file) => {
+    const formData = new FormData();
+    formData.append('photo', file);
+    return apiRequest('/photo/detect-faces', {
+      method: 'POST',
+      body: formData
+    });
+  },
+  verifyAttendance: (date, verifiedStudents) => apiRequest('/photo/verify-attendance', {
+    method: 'POST',
+    body: JSON.stringify({ date, verified_students: verifiedStudents })
+  }),
+  cleanupPhotos: () => apiRequest('/photo/cleanup', {
+    method: 'DELETE'
+  })
 };

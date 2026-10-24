@@ -7,6 +7,7 @@ from phase1_students.routes import students_bp
 from phase1_students.models import Student
 from phase2_attendance.models import Attendance
 from phase2_attendance.routes import attendance_bp
+from phase3_photo.routes import photo_bp
 
 def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
@@ -29,6 +30,7 @@ def create_app(test_config=None):
     # Register Blueprints
     app.register_blueprint(students_bp, url_prefix='/api')
     app.register_blueprint(attendance_bp, url_prefix='/api')
+    app.register_blueprint(photo_bp, url_prefix='/api')
 
     with app.app_context():
         db.create_all()
