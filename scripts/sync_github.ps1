@@ -115,7 +115,34 @@ $issues = @(
     }
 )
 
-Write-Host "Creating issues on GitHub..." -ForegroundColor Cyan
+# Create Kanban Labels
+$kanbanLabels = @(
+    @{ name = "status:backlog"; color = "cfd3d7"; description = "Items in product backlog" },
+    @{ name = "status:ready"; color = "0075ca"; description = "Items ready for development" },
+    @{ name = "status:in-progress"; color = "fbca04"; description = "Currently in active development" },
+    @{ name = "status:in-review"; color = "d93f0b"; description = "PR open / in peer review" },
+    @{ name = "status:done"; color = "0e8a16"; description = "Completed and merged" },
+    @{ name = "phase-1"; color = "5319e7"; description = "Phase 1 - Student Portfolio MVP" },
+    @{ name = "phase-2"; color = "1d76db"; description = "Phase 2 - Daily Attendance & Reports" },
+    @{ name = "phase-3"; color = "b60205"; description = "Phase 3 - Photo-Assisted Verification" },
+    @{ name = "phase-4"; color = "006b75"; description = "Phase 4 - Quality & Documentation" }
+)
+
+Write-Host "Creating Kanban status labels on GitHub..." -ForegroundColor Cyan
+foreach ($lbl in $kanbanLabels) {
+    try {
+        $body = @{
+            name = $lbl.name
+            color = $lbl.color
+            description = $lbl.description
+        } | ConvertTo-Json
+        Invoke-RestMethod -Uri "https://api.github.com/repos/$Owner/$RepoName/labels" -Headers $Headers -Method Post -Body $body 2>$null
+    } catch {
+        # Label may already exist
+    }
+}
+
+Write-Host "Creating issues mapped to Kanban board..." -ForegroundColor Cyan
 foreach ($item in $issues) {
     try {
         $body = @{
@@ -130,4 +157,5 @@ foreach ($item in $issues) {
     }
 }
 
-Write-Host "`nAll set! View your project at: https://github.com/$Owner/$RepoName" -ForegroundColor Green
+Write-Host "`nAll set! View your Kanban project at: https://github.com/$Owner/$RepoName/projects" -ForegroundColor Green
+
