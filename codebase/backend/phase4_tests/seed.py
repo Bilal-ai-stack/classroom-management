@@ -1,5 +1,6 @@
 import sys
 import os
+from datetime import date, timedelta
 
 # Ensure backend root is in python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -7,6 +8,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from app import create_app
 from db import db
 from phase1_students.models import Student
+from phase2_attendance.models import Attendance
 
 DEMO_STUDENTS = [
     {
@@ -134,29 +136,61 @@ DEMO_STUDENTS = [
 def seed_database():
     app = create_app()
     with app.app_context():
-        # Check if students already exist
         count = Student.query.count()
-        if count > 0:
-            print(f"Database already contains {count} students. Skipping seed.")
-            return
+        if count == 0:
+            print("Seeding database with fictional demo student records...")
+            students = []
+            for data in DEMO_STUDENTS:
+                student = Student(
+                    roll_number=data["roll_number"],
+                    full_name=data["full_name"],
+                    class_name=data["class_name"],
+                    section=data["section"],
+                    guardian_contact=data["guardian_contact"],
+                    enrollment_date=data["enrollment_date"],
+                    notes=data["notes"],
+                    photo_path=data["photo_path"],
+                    is_active=True
+                )
+                db.session.add(student)
+                students.append(student)
 
-        print("Seeding database with fictional demo student records...")
-        for data in DEMO_STUDENTS:
-            student = Student(
-                roll_number=data["roll_number"],
-                full_name=data["full_name"],
-                class_name=data["class_name"],
-                section=data["section"],
-                guardian_contact=data["guardian_contact"],
-                enrollment_date=data["enrollment_date"],
-                notes=data["notes"],
-                photo_path=data["photo_path"],
-                is_active=True
-            )
-            db.session.add(student)
+            db.session.commit()
+            print(f"Successfully seeded {len(DEMO_STUDENTS)} students!")
+        else:
+            print(f"Database contains {count} students.")
 
-        db.session.commit()
-        print(f"Successfully seeded {len(DEMO_STUDENTS)} students into SQLite database!")
+        # Seed sample attendance records if none exist
+        att_count = Attendance.query.count()
+        if att_count == 0:
+            print("Seeding sample attendance records...")
+            students = Student.query.filter_by(is_active=True).all()
+            today = date.today()
+            # Seed 5 days of history
+            for day_offset in range(5):
+                cur_date = (today - timedelta(days=day_offset)).isoformat()
+                for i, st in enumerate(students):
+                    if (i + day_offset) % 7 == 0:
+                        st_status = 'Absent'
+                        remarks = 'Medical leave'
+                    elif (i + day_offset) % 5 == 0:
+                        st_status = 'Late'
+                        remarks = 'Bus delay'
+                    else:
+                        st_status = 'Present'
+                        remarks = None
+
+                    att = Attendance(
+                        student_id=st.id,
+                        date=cur_date,
+                        status=st_status,
+                        remarks=remarks
+                    )
+                    db.session.add(att)
+            db.session.commit()
+            print(f"Successfully seeded {Attendance.query.count()} attendance records!")
+        else:
+            print(f"Database contains {att_count} attendance records.")
 
 if __name__ == '__main__':
     seed_database()

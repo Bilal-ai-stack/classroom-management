@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Navbar from './shared/Navbar';
 import Modal from './shared/Modal';
 import StatusBadge from './shared/StatusBadge';
-import { studentApi } from './shared/api';
+import { studentApi, attendanceApi } from './shared/api';
 import {
   Users,
   Search,
@@ -23,7 +23,9 @@ import {
   Clock,
   X,
   UploadCloud,
-  Sparkles
+  Sparkles,
+  BarChart3,
+  UserCheck
 } from 'lucide-react';
 
 const getTodayDate = () => new Date().toISOString().split('T')[0];
@@ -45,10 +47,38 @@ export default function App() {
   const [selectedClass, setSelectedClass] = useState('');
   const [includeArchived, setIncludeArchived] = useState(false);
 
-  // Attendance Tab State
+  // Phase 2 Attendance Roster State
   const [attendanceDate, setAttendanceDate] = useState(getTodayDate);
-  const [attendanceClass, setAttendanceClass] = useState('Grade 1');
-  const [attendanceRecords, setAttendanceRecords] = useState({});
+  const [attendanceClass, setAttendanceClass] = useState('All Classes');
+  const [attendanceRoster, setAttendanceRoster] = useState([]);
+  const [attendanceSummary, setAttendanceSummary] = useState({
+    total_students: 0,
+    present_count: 0,
+    absent_count: 0,
+    late_count: 0,
+    unrecorded_count: 0,
+    attendance_rate: 100
+  });
+  const [isSavingAttendance, setIsSavingAttendance] = useState(false);
+
+  // Phase 2 Reports State
+  const [reportStartDate, setReportStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().split('T')[0];
+  });
+  const [reportEndDate, setReportEndDate] = useState(getTodayDate);
+  const [reportClass, setReportClass] = useState('All Classes');
+  const [reportData, setReportData] = useState({
+    summary: { total_records: 0, present_count: 0, late_count: 0, absent_count: 0, overall_rate: 100 },
+    timeline: [],
+    records: []
+  });
+
+  // Student Portfolio Modal State
+  const [viewingStudent, setViewingStudent] = useState(null);
+  const [studentHistory, setStudentHistory] = useState(null);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -83,9 +113,9 @@ export default function App() {
         today_late: 1,
         attendance_rate: 92,
         recent_students: [
-          { id: 1, roll_number: 'STU-101', full_name: 'Amina Khan', class_name: 'Grade 1', section: 'A', is_active: true },
-          { id: 2, roll_number: 'STU-102', full_name: 'Bilal Farooq', class_name: 'Grade 1', section: 'A', is_active: true },
-          { id: 3, roll_number: 'STU-103', full_name: 'Zainab Fatima', class_name: 'Grade 2', section: 'B', is_active: true }
+          { id: 1, roll_number: 'R-101', full_name: 'Aarav Patel', class_name: 'Grade 4', section: 'A', is_active: true },
+          { id: 2, roll_number: 'R-102', full_name: 'Sophia Chen', class_name: 'Grade 4', section: 'A', is_active: true },
+          { id: 3, roll_number: 'R-103', full_name: 'Liam Johnson', class_name: 'Grade 4', section: 'A', is_active: true }
         ]
       });
     }
@@ -96,12 +126,9 @@ export default function App() {
       const res = await studentApi.getClasses();
       if (res && res.classes) {
         setClasses(res.classes);
-        if (res.classes.length > 0) setAttendanceClass(res.classes[0]);
       }
     } catch {
-      const fallback = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5'];
-      setClasses(fallback);
-      setAttendanceClass(fallback[0]);
+      setClasses(['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5']);
     }
   }, []);
 
@@ -111,28 +138,62 @@ export default function App() {
       const res = await studentApi.getStudents(searchQuery, selectedClass, includeArchived);
       if (res && res.students) {
         setStudents(res.students);
-        // Initialize default attendance statuses if not set
-        setAttendanceRecords((prev) => {
-          const updated = { ...prev };
-          res.students.forEach((s) => {
-            if (!updated[s.id]) updated[s.id] = 'Present';
-          });
-          return updated;
-        });
       }
     } catch {
-      const fallbackList = [
-        { id: 1, roll_number: 'STU-101', full_name: 'Amina Khan', class_name: 'Grade 1', section: 'A', guardian_contact: '+92 300 1234567', enrollment_date: '2026-01-10', is_active: true },
-        { id: 2, roll_number: 'STU-102', full_name: 'Bilal Farooq', class_name: 'Grade 1', section: 'A', guardian_contact: '+92 321 7654321', enrollment_date: '2026-01-12', is_active: true },
-        { id: 3, roll_number: 'STU-103', full_name: 'Zainab Fatima', class_name: 'Grade 2', section: 'B', guardian_contact: '+92 333 9876543', enrollment_date: '2026-01-15', is_active: true },
-        { id: 4, roll_number: 'STU-104', full_name: 'Daniyal Ahmed', class_name: 'Grade 2', section: 'A', guardian_contact: '+92 345 1122334', enrollment_date: '2026-01-18', is_active: true }
-      ];
-      setStudents(fallbackList);
-      setAttendanceRecords({ 1: 'Present', 2: 'Present', 3: 'Late', 4: 'Present' });
+      setStudents([
+        { id: 1, roll_number: 'R-101', full_name: 'Aarav Patel', class_name: 'Grade 4', section: 'A', guardian_contact: '+1 (555) 234-5678', enrollment_date: '2026-01-15', is_active: true },
+        { id: 2, roll_number: 'R-102', full_name: 'Sophia Chen', class_name: 'Grade 4', section: 'A', guardian_contact: '+1 (555) 345-6789', enrollment_date: '2026-01-15', is_active: true },
+        { id: 3, roll_number: 'R-103', full_name: 'Liam Johnson', class_name: 'Grade 4', section: 'A', guardian_contact: '+1 (555) 456-7890', enrollment_date: '2026-01-18', is_active: true },
+        { id: 4, roll_number: 'R-104', full_name: 'Maya Rodriguez', class_name: 'Grade 4', section: 'A', guardian_contact: '+1 (555) 567-8901', enrollment_date: '2026-01-20', is_active: true }
+      ]);
     } finally {
       setLoading(false);
     }
   }, [searchQuery, selectedClass, includeArchived]);
+
+  // Load Daily Attendance Roster from Backend
+  const loadDailyAttendance = useCallback(async () => {
+    try {
+      const res = await attendanceApi.getDailyAttendance(attendanceDate, attendanceClass);
+      if (res && res.roster) {
+        setAttendanceRoster(res.roster);
+        if (res.summary) setAttendanceSummary(res.summary);
+      }
+    } catch {
+      // Fallback
+      setAttendanceRoster(students.map((s) => ({
+        student_id: s.id,
+        roll_number: s.roll_number,
+        full_name: s.full_name,
+        class_name: s.class_name,
+        section: s.section,
+        status: 'Present',
+        remarks: ''
+      })));
+    }
+  }, [attendanceDate, attendanceClass, students]);
+
+  // Load Reports Analytics from Backend
+  const loadReports = useCallback(async () => {
+    try {
+      const res = await attendanceApi.getReport(reportStartDate, reportEndDate, reportClass);
+      if (res && res.success) {
+        setReportData(res);
+      }
+    } catch {
+      // Fallback
+      setReportData({
+        summary: { total_records: 48, present_count: 42, late_count: 4, absent_count: 2, overall_rate: 87.5 },
+        timeline: [
+          { date: '2026-10-20', present: 10, late: 1, absent: 1, total: 12 },
+          { date: '2026-10-21', present: 11, late: 1, absent: 0, total: 12 },
+          { date: '2026-10-22', present: 10, late: 2, absent: 0, total: 12 },
+          { date: '2026-10-23', present: 11, late: 0, absent: 1, total: 12 }
+        ],
+        records: []
+      });
+    }
+  }, [reportStartDate, reportEndDate, reportClass]);
 
   useEffect(() => {
     loadDashboardStats();
@@ -143,11 +204,48 @@ export default function App() {
     loadStudents();
   }, [loadStudents]);
 
+  useEffect(() => {
+    if (activeTab === 'attendance') {
+      loadDailyAttendance();
+    }
+  }, [activeTab, loadDailyAttendance]);
+
+  useEffect(() => {
+    if (activeTab === 'reports') {
+      loadReports();
+    }
+  }, [activeTab, loadReports]);
+
+  // Open Student Portfolio and load real attendance history
+  const handleOpenPortfolio = async (student) => {
+    setViewingStudent(student);
+    setLoadingHistory(true);
+    try {
+      const res = await attendanceApi.getStudentHistory(student.id);
+      if (res && res.success) {
+        setStudentHistory(res);
+      }
+    } catch {
+      setStudentHistory({
+        metrics: { total_days: 5, present_days: 4, late_days: 1, absent_days: 0, attendance_rate: 80.0 },
+        history: [
+          { id: 1, date: '2026-10-24', status: 'Present', remarks: 'On time' },
+          { id: 2, date: '2026-10-23', status: 'Present', remarks: null },
+          { id: 3, date: '2026-10-22', status: 'Late', remarks: 'Bus delay' },
+          { id: 4, date: '2026-10-21', status: 'Present', remarks: null },
+          { id: 5, date: '2026-10-20', status: 'Present', remarks: null }
+        ]
+      });
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
   const handleOpenAddModal = () => {
     setFormData({
-      roll_number: `STU-${Math.floor(100 + Math.random() * 900)}`,
+      roll_number: `R-${Math.floor(100 + Math.random() * 900)}`,
       full_name: '',
-      class_name: classes[0] || 'Grade 1',
+      class_name: classes[0] || 'Grade 4',
       section: 'A',
       guardian_contact: '',
       enrollment_date: getTodayDate(),
@@ -217,35 +315,48 @@ export default function App() {
     }
   };
 
+  // Set individual student status in attendance roster
   const handleSetStudentStatus = (studentId, status) => {
-    setAttendanceRecords((prev) => ({
-      ...prev,
-      [studentId]: status
-    }));
+    setAttendanceRoster((prev) =>
+      prev.map((item) =>
+        item.student_id === studentId ? { ...item, status } : item
+      )
+    );
+  };
+
+  const handleSetStudentRemarks = (studentId, remarks) => {
+    setAttendanceRoster((prev) =>
+      prev.map((item) =>
+        item.student_id === studentId ? { ...item, remarks } : item
+      )
+    );
   };
 
   const handleMarkAll = (status) => {
-    const updated = {};
-    students.forEach((s) => {
-      updated[s.id] = status;
-    });
-    setAttendanceRecords(updated);
+    setAttendanceRoster((prev) =>
+      prev.map((item) => ({ ...item, status }))
+    );
     showToast(`Marked all students as ${status}`);
   };
 
-  const handleSaveAttendance = () => {
-    const total = students.length;
-    const presentCount = Object.values(attendanceRecords).filter((s) => s === 'Present').length;
-    const rate = total > 0 ? Math.round((presentCount / total) * 100) : 100;
+  const handleSaveAttendance = async () => {
+    setIsSavingAttendance(true);
+    try {
+      const records = attendanceRoster.map((item) => ({
+        student_id: item.student_id,
+        status: item.status === 'Unrecorded' ? 'Present' : item.status,
+        remarks: item.remarks || ''
+      }));
 
-    setStats((prev) => ({
-      ...prev,
-      attendance_rate: rate,
-      today_present: presentCount,
-      today_absent: total - presentCount
-    }));
-
-    showToast(`Attendance for ${attendanceDate} saved successfully!`);
+      await attendanceApi.saveBulkAttendance(attendanceDate, records);
+      showToast(`Attendance for ${attendanceDate} saved successfully!`);
+      loadDailyAttendance();
+      loadDashboardStats();
+    } catch (err) {
+      showToast(`Error saving: ${err.message}`);
+    } finally {
+      setIsSavingAttendance(false);
+    }
   };
 
   return (
@@ -302,17 +413,17 @@ export default function App() {
                 </div>
                 <div>
                   <div className="stat-val">{stats.attendance_rate}%</div>
-                  <div className="stat-label">Attendance Rate</div>
+                  <div className="stat-label">Today's Attendance Rate</div>
                 </div>
               </div>
 
-              <div className="stat-card" onClick={() => setActiveTab('students')}>
+              <div className="stat-card" onClick={() => setActiveTab('reports')}>
                 <div className="stat-icon warning">
                   <TrendingUp size={24} />
                 </div>
                 <div>
-                  <div className="stat-val">{classes.length || 5}</div>
-                  <div className="stat-label">Active Classes</div>
+                  <div className="stat-val">{stats.today_present}</div>
+                  <div className="stat-label">Students Present Today</div>
                 </div>
               </div>
 
@@ -358,11 +469,11 @@ export default function App() {
 
                   <div
                     className="quick-action-item"
-                    onClick={() => setActiveTab('photo_review')}
+                    onClick={() => setActiveTab('reports')}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                      <div style={{ color: 'var(--warning)' }}><Camera size={20} /></div>
-                      <span>Photo-Assisted Review</span>
+                      <div style={{ color: 'var(--warning)' }}><BarChart3 size={20} /></div>
+                      <span>View Attendance Reports & Analytics</span>
                     </div>
                     <ArrowRight size={18} className="arrow-icon" />
                   </div>
@@ -371,7 +482,7 @@ export default function App() {
 
               <div className="card">
                 <div className="card-header">
-                  <h2 className="card-title">Recently Registered Students</h2>
+                  <h2 className="card-title">Recently Enrolled Students</h2>
                   <button
                     className="btn btn-secondary btn-sm"
                     onClick={() => setActiveTab('students')}
@@ -392,8 +503,9 @@ export default function App() {
                           padding: '0.85rem 1rem',
                           background: 'var(--border-light)',
                           borderRadius: 'var(--radius-md)',
-                          transition: 'all 0.25s ease'
+                          cursor: 'pointer'
                         }}
+                        onClick={() => handleOpenPortfolio(s)}
                       >
                         <div>
                           <div style={{ fontWeight: 700, fontSize: '0.92rem' }}>{s.full_name}</div>
@@ -422,7 +534,7 @@ export default function App() {
                   Student Directory & Portfolios
                 </h1>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-                  Manage enrolled student profiles, classes, and contact records.
+                  Click any student to view their attendance history, profile notes, and performance metrics.
                 </p>
               </div>
               <button className="btn btn-primary" onClick={handleOpenAddModal}>
@@ -509,7 +621,7 @@ export default function App() {
                     </tr>
                   ) : (
                     students.map((student) => (
-                      <tr key={student.id}>
+                      <tr key={student.id} style={{ cursor: 'pointer' }} onClick={() => handleOpenPortfolio(student)}>
                         <td style={{ fontWeight: 800, color: 'var(--primary)' }}>
                           {student.roll_number}
                         </td>
@@ -548,13 +660,19 @@ export default function App() {
                             <span className="badge badge-neutral">Archived</span>
                           )}
                         </td>
-                        <td style={{ textAlign: 'right' }}>
+                        <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
                           <div style={{ display: 'inline-flex', gap: '0.4rem' }}>
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              title="View Portfolio"
+                              onClick={() => handleOpenPortfolio(student)}
+                            >
+                              <UserCheck size={14} />
+                            </button>
                             <button
                               className="btn btn-secondary btn-sm"
                               title="Edit Student"
                               onClick={() => handleOpenEditModal(student)}
-                              aria-label="Edit student"
                             >
                               <Edit2 size={14} />
                             </button>
@@ -562,7 +680,6 @@ export default function App() {
                               className={`btn btn-sm ${student.is_active ? 'btn-outline-danger' : 'btn-secondary'}`}
                               title={student.is_active ? 'Archive Student' : 'Restore Student'}
                               onClick={() => handleToggleArchive(student)}
-                              aria-label="Archive or restore student"
                             >
                               <Archive size={14} />
                             </button>
@@ -586,10 +703,10 @@ export default function App() {
                   Daily Attendance Roster
                 </h1>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-                  Mark presence in real time with quick one-click status toggles.
+                  Mark and synchronize classroom presence with the SQLite database.
                 </p>
               </div>
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                 <button
                   className="btn btn-secondary"
                   onClick={() => handleMarkAll('Present')}
@@ -598,39 +715,63 @@ export default function App() {
                 </button>
                 <button
                   className="btn btn-primary"
+                  disabled={isSavingAttendance}
                   onClick={handleSaveAttendance}
                 >
-                  <CheckCircle2 size={16} /> Save Attendance
+                  <CheckCircle2 size={16} /> {isSavingAttendance ? 'Saving...' : 'Save Attendance'}
                 </button>
               </div>
             </div>
 
-            {/* Attendance Filters */}
+            {/* Attendance Filters & Summary Bar */}
             <div className="card" style={{ padding: '1.15rem 1.4rem', marginBottom: '1.5rem' }}>
-              <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ fontSize: '0.88rem', fontWeight: 700 }}>Date:</span>
-                  <input
-                    type="date"
-                    className="form-input"
-                    style={{ maxWidth: '180px' }}
-                    value={attendanceDate}
-                    onChange={(e) => setAttendanceDate(e.target.value)}
-                  />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.25rem' }}>
+                <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '0.88rem', fontWeight: 700 }}>Date:</span>
+                    <input
+                      type="date"
+                      className="form-input"
+                      style={{ maxWidth: '170px' }}
+                      value={attendanceDate}
+                      onChange={(e) => setAttendanceDate(e.target.value)}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '0.88rem', fontWeight: 700 }}>Class:</span>
+                    <select
+                      className="form-select"
+                      style={{ maxWidth: '170px' }}
+                      value={attendanceClass}
+                      onChange={(e) => setAttendanceClass(e.target.value)}
+                    >
+                      <option value="All Classes">All Classes</option>
+                      {classes.map((cls) => (
+                        <option key={cls} value={cls}>{cls}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ fontSize: '0.88rem', fontWeight: 700 }}>Class:</span>
-                  <select
-                    className="form-select"
-                    style={{ maxWidth: '180px' }}
-                    value={attendanceClass}
-                    onChange={(e) => setAttendanceClass(e.target.value)}
-                  >
-                    {classes.map((cls) => (
-                      <option key={cls} value={cls}>{cls}</option>
-                    ))}
-                  </select>
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span className="badge badge-present">
+                    Present: {attendanceSummary.present_count}
+                  </span>
+                  <span className="badge badge-late">
+                    Late: {attendanceSummary.late_count}
+                  </span>
+                  <span className="badge badge-absent">
+                    Absent: {attendanceSummary.absent_count}
+                  </span>
+                  {attendanceSummary.unrecorded_count > 0 && (
+                    <span className="badge badge-neutral">
+                      Unrecorded: {attendanceSummary.unrecorded_count}
+                    </span>
+                  )}
+                  <div style={{ fontWeight: 800, color: 'var(--primary)', fontSize: '0.95rem' }}>
+                    Rate: {attendanceSummary.attendance_rate}%
+                  </div>
                 </div>
               </div>
             </div>
@@ -644,47 +785,256 @@ export default function App() {
                     <th>Student Name</th>
                     <th>Class</th>
                     <th>Current Status</th>
-                    <th style={{ textAlign: 'right' }}>Mark Attendance</th>
+                    <th>Remarks</th>
+                    <th style={{ textAlign: 'right' }}>Mark Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {students.map((student) => {
-                    const status = attendanceRecords[student.id] || 'Present';
-                    return (
-                      <tr key={student.id}>
-                        <td style={{ fontWeight: 800, color: 'var(--primary)' }}>{student.roll_number}</td>
-                        <td style={{ fontWeight: 700 }}>{student.full_name}</td>
-                        <td>{student.class_name} ({student.section})</td>
-                        <td>
-                          <StatusBadge status={status} />
-                        </td>
-                        <td style={{ textAlign: 'right' }}>
-                          <div className="status-btn-group">
-                            <button
-                              className={`status-toggle-btn ${status === 'Present' ? 'active-present' : ''}`}
-                              onClick={() => handleSetStudentStatus(student.id, 'Present')}
-                            >
-                              <Check size={13} /> Present
-                            </button>
-                            <button
-                              className={`status-toggle-btn ${status === 'Late' ? 'active-late' : ''}`}
-                              onClick={() => handleSetStudentStatus(student.id, 'Late')}
-                            >
-                              <Clock size={13} /> Late
-                            </button>
-                            <button
-                              className={`status-toggle-btn ${status === 'Absent' ? 'active-absent' : ''}`}
-                              onClick={() => handleSetStudentStatus(student.id, 'Absent')}
-                            >
-                              <X size={13} /> Absent
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {attendanceRoster.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>
+                        No enrolled students found for {attendanceClass}.
+                      </td>
+                    </tr>
+                  ) : (
+                    attendanceRoster.map((student) => {
+                      const status = student.status || 'Present';
+                      return (
+                        <tr key={student.student_id}>
+                          <td style={{ fontWeight: 800, color: 'var(--primary)' }}>{student.roll_number}</td>
+                          <td style={{ fontWeight: 700 }}>{student.full_name}</td>
+                          <td>{student.class_name} ({student.section})</td>
+                          <td>
+                            <StatusBadge status={status} />
+                          </td>
+                          <td style={{ minWidth: '180px' }}>
+                            <input
+                              type="text"
+                              className="form-input"
+                              style={{ padding: '0.4rem 0.65rem', fontSize: '0.85rem' }}
+                              placeholder="e.g. Doctor note..."
+                              value={student.remarks || ''}
+                              onChange={(e) => handleSetStudentRemarks(student.student_id, e.target.value)}
+                            />
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <div className="status-btn-group">
+                              <button
+                                className={`status-toggle-btn ${status === 'Present' ? 'active-present' : ''}`}
+                                onClick={() => handleSetStudentStatus(student.student_id, 'Present')}
+                              >
+                                <Check size={13} /> Present
+                              </button>
+                              <button
+                                className={`status-toggle-btn ${status === 'Late' ? 'active-late' : ''}`}
+                                onClick={() => handleSetStudentStatus(student.student_id, 'Late')}
+                              >
+                                <Clock size={13} /> Late
+                              </button>
+                              <button
+                                className={`status-toggle-btn ${status === 'Absent' ? 'active-absent' : ''}`}
+                                onClick={() => handleSetStudentStatus(student.student_id, 'Absent')}
+                              >
+                                <X size={13} /> Absent
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* REPORTS & ANALYTICS TAB */}
+        {activeTab === 'reports' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <h1 style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
+                  Attendance Analytics & Reports
+                </h1>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
+                  View longitudinal attendance trends, aggregate rates, and export CSV logs.
+                </p>
+              </div>
+
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  const recordsToExport = reportData.records.length > 0 ? reportData.records : students.map(s => ({
+                    roll_number: s.roll_number,
+                    student_name: s.full_name,
+                    class_name: s.class_name,
+                    date: attendanceDate,
+                    status: 'Present',
+                    remarks: ''
+                  }));
+                  const csvContent = "data:text/csv;charset=utf-8," +
+                    "Roll Number,Student Name,Class,Date,Status,Remarks\n" +
+                    recordsToExport.map(r => `"${r.roll_number}","${r.student_name}","${r.class_name}","${r.date}","${r.status}","${r.remarks || ''}"`).join("\n");
+                  const encodedUri = encodeURI(csvContent);
+                  const link = document.createElement("a");
+                  link.setAttribute("href", encodedUri);
+                  link.setAttribute("download", `attendance_report_${reportStartDate}_to_${reportEndDate}.csv`);
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  showToast('Attendance report CSV downloaded successfully!');
+                }}
+              >
+                <BookOpen size={16} /> Export CSV Report
+              </button>
+            </div>
+
+            {/* Filter Bar */}
+            <div className="card" style={{ padding: '1.15rem 1.4rem', marginBottom: '1.5rem' }}>
+              <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '0.88rem', fontWeight: 700 }}>From:</span>
+                  <input
+                    type="date"
+                    className="form-input"
+                    style={{ maxWidth: '170px' }}
+                    value={reportStartDate}
+                    onChange={(e) => setReportStartDate(e.target.value)}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '0.88rem', fontWeight: 700 }}>To:</span>
+                  <input
+                    type="date"
+                    className="form-input"
+                    style={{ maxWidth: '170px' }}
+                    value={reportEndDate}
+                    onChange={(e) => setReportEndDate(e.target.value)}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '0.88rem', fontWeight: 700 }}>Class:</span>
+                  <select
+                    className="form-select"
+                    style={{ maxWidth: '170px' }}
+                    value={reportClass}
+                    onChange={(e) => setReportClass(e.target.value)}
+                  >
+                    <option value="All Classes">All Classes</option>
+                    {classes.map((cls) => (
+                      <option key={cls} value={cls}>{cls}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <button className="btn btn-secondary" onClick={loadReports}>
+                  <RefreshCw size={15} /> Apply Filter
+                </button>
+              </div>
+            </div>
+
+            {/* Summary Metrics Cards */}
+            <div className="stats-grid">
+              <div className="stat-card">
+                <div className="stat-icon success">
+                  <CalendarCheck size={24} />
+                </div>
+                <div>
+                  <div className="stat-val">{reportData.summary.overall_rate}%</div>
+                  <div className="stat-label">Overall Attendance Rate</div>
+                </div>
+              </div>
+
+              <div className="stat-card">
+                <div className="stat-icon primary">
+                  <CheckCircle2 size={24} />
+                </div>
+                <div>
+                  <div className="stat-val">{reportData.summary.present_count}</div>
+                  <div className="stat-label">Total Present Records</div>
+                </div>
+              </div>
+
+              <div className="stat-card">
+                <div className="stat-icon warning">
+                  <Clock size={24} />
+                </div>
+                <div>
+                  <div className="stat-val">{reportData.summary.late_count}</div>
+                  <div className="stat-label">Total Late Records</div>
+                </div>
+              </div>
+
+              <div className="stat-card">
+                <div className="stat-icon danger">
+                  <X size={24} />
+                </div>
+                <div>
+                  <div className="stat-val">{reportData.summary.absent_count}</div>
+                  <div className="stat-label">Total Absent Records</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Timeline Breakdown Table */}
+            <div className="card" style={{ marginBottom: '1.5rem' }}>
+              <div className="card-header">
+                <h2 className="card-title">Daily Attendance Trends</h2>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  {reportData.timeline.length} Recorded Day(s)
+                </span>
+              </div>
+
+              <div className="table-container">
+                <table className="custom-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Total Marked</th>
+                      <th>Present</th>
+                      <th>Late</th>
+                      <th>Absent</th>
+                      <th>Day Attendance Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reportData.timeline.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                          No attendance history found for the selected range.
+                        </td>
+                      </tr>
+                    ) : (
+                      reportData.timeline.map((day) => {
+                        const dayRate = day.total > 0 ? Math.round((day.present / day.total) * 100) : 0;
+                        return (
+                          <tr key={day.date}>
+                            <td style={{ fontWeight: 700 }}>{day.date}</td>
+                            <td>{day.total}</td>
+                            <td><span className="badge badge-present">{day.present}</span></td>
+                            <td><span className="badge badge-late">{day.late}</span></td>
+                            <td><span className="badge badge-absent">{day.absent}</span></td>
+                            <td style={{ minWidth: '180px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                <span style={{ fontWeight: 700, fontSize: '0.88rem', minWidth: '38px' }}>{dayRate}%</span>
+                                <div className="progress-container">
+                                  <div
+                                    className={`progress-fill ${dayRate >= 85 ? 'success' : ''}`}
+                                    style={{ width: `${dayRate}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
@@ -707,7 +1057,6 @@ export default function App() {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
-              {/* Upload Drop Zone */}
               <div className="card" style={{ textAlign: 'center', padding: '2.5rem 1.5rem', border: '2px dashed var(--primary-border)' }}>
                 <div style={{ display: 'inline-flex', padding: '1rem', background: 'var(--primary-light)', borderRadius: '50%', color: 'var(--primary)', marginBottom: '1rem' }}>
                   <UploadCloud size={36} />
@@ -724,7 +1073,6 @@ export default function App() {
                 </button>
               </div>
 
-              {/* Detected Face Verification Panel */}
               <div className="card">
                 <div className="card-header">
                   <h2 className="card-title">Detected Students in Session</h2>
@@ -776,48 +1124,117 @@ export default function App() {
             </div>
           </div>
         )}
+      </main>
 
-        {/* REPORTS TAB */}
-        {activeTab === 'reports' && (
+      {/* STUDENT PORTFOLIO MODAL */}
+      <Modal
+        isOpen={Boolean(viewingStudent)}
+        onClose={() => setViewingStudent(null)}
+        title={viewingStudent ? `${viewingStudent.full_name}'s Portfolio` : 'Student Portfolio'}
+      >
+        {viewingStudent && (
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border)' }}>
+              <div style={{
+                width: '54px',
+                height: '54px',
+                borderRadius: '14px',
+                background: 'linear-gradient(135deg, #2563EB, #1D4ED8)',
+                color: '#FFFFFF',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.3rem',
+                fontWeight: 800
+              }}>
+                {viewingStudent.full_name.charAt(0)}
+              </div>
               <div>
-                <h1 style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
-                  Attendance & Portfolio Reports
-                </h1>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-                  Export records and view monthly attendance trends.
-                </p>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)' }}>{viewingStudent.full_name}</h3>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>
+                  Roll: <strong style={{ color: 'var(--primary)' }}>{viewingStudent.roll_number}</strong> • {viewingStudent.class_name} (Section {viewingStudent.section})
+                </div>
               </div>
             </div>
 
-            <div className="card" style={{ padding: '2rem' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '0.5rem' }}>Export Attendance Summary</h2>
-              <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.92rem' }}>
-                Download comprehensive student roster and attendance history as a clean CSV report.
-              </p>
-              <button
-                className="btn btn-primary"
-                onClick={() => {
-                  const csvContent = "data:text/csv;charset=utf-8," +
-                    "Roll Number,Name,Class,Section,Guardian Contact,Status\n" +
-                    students.map(s => `"${s.roll_number}","${s.full_name}","${s.class_name}","${s.section}","${s.guardian_contact || ''}","${s.is_active ? 'Active' : 'Archived'}"`).join("\n");
-                  const encodedUri = encodeURI(csvContent);
-                  const link = document.createElement("a");
-                  link.setAttribute("href", encodedUri);
-                  link.setAttribute("download", `student_roster_${new Date().toISOString().slice(0, 10)}.csv`);
-                  document.body.appendChild(link);
-                  link.click();
-                  document.body.removeChild(link);
-                  showToast('Student CSV export downloaded successfully!');
-                }}
-              >
-                <BookOpen size={16} /> Export Student Roster (CSV)
+            {/* Attendance Performance Metrics */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.75rem', color: 'var(--text-main)' }}>
+                Attendance Record
+              </h4>
+              {loadingHistory ? (
+                <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading records...</div>
+              ) : studentHistory ? (
+                <div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem', marginBottom: '1rem' }}>
+                    <div style={{ background: 'var(--border-light)', padding: '0.65rem', borderRadius: 'var(--radius-sm)', textAlign: 'center' }}>
+                      <div style={{ fontSize: '1.2rem', fontWeight: 800 }}>{studentHistory.metrics.attendance_rate}%</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Rate</div>
+                    </div>
+                    <div style={{ background: 'var(--success-bg)', padding: '0.65rem', borderRadius: 'var(--radius-sm)', textAlign: 'center' }}>
+                      <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--success)' }}>{studentHistory.metrics.present_days}</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--success)' }}>Present</div>
+                    </div>
+                    <div style={{ background: 'var(--warning-bg)', padding: '0.65rem', borderRadius: 'var(--radius-sm)', textAlign: 'center' }}>
+                      <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--warning)' }}>{studentHistory.metrics.late_days}</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--warning)' }}>Late</div>
+                    </div>
+                    <div style={{ background: 'var(--danger-bg)', padding: '0.65rem', borderRadius: 'var(--radius-sm)', textAlign: 'center' }}>
+                      <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--danger)' }}>{studentHistory.metrics.absent_days}</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--danger)' }}>Absent</div>
+                    </div>
+                  </div>
+
+                  {/* Recent History Log */}
+                  <h4 style={{ fontSize: '0.88rem', fontWeight: 700, marginBottom: '0.5rem' }}>Recent Log</h4>
+                  <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                    {studentHistory.history && studentHistory.history.length > 0 ? (
+                      studentHistory.history.map((h) => (
+                        <div key={h.id} className="history-item">
+                          <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{h.date}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            {h.remarks && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{h.remarks}</span>}
+                            <StatusBadge status={h.status} />
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No attendance sessions recorded yet.</p>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            {/* Profile Info */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', fontSize: '0.88rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+              <div>
+                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.78rem' }}>Guardian Contact</span>
+                <strong>{viewingStudent.guardian_contact || 'None listed'}</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.78rem' }}>Enrollment Date</span>
+                <strong>{viewingStudent.enrollment_date}</strong>
+              </div>
+            </div>
+
+            {viewingStudent.notes && (
+              <div style={{ marginTop: '0.75rem', fontSize: '0.85rem' }}>
+                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.78rem' }}>Notes</span>
+                <p style={{ background: 'var(--border-light)', padding: '0.5rem 0.75rem', borderRadius: 'var(--radius-sm)', marginTop: '0.25rem' }}>
+                  {viewingStudent.notes}
+                </p>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+              <button className="btn btn-secondary" onClick={() => setViewingStudent(null)}>
+                Close Portfolio
               </button>
             </div>
           </div>
         )}
-      </main>
+      </Modal>
 
       {/* ADD STUDENT MODAL */}
       <Modal

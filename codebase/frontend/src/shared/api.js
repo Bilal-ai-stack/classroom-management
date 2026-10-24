@@ -20,7 +20,7 @@ export async function apiRequest(endpoint, options = {}) {
   }
 }
 
-// Phase 1 API endpoints
+// Student Portfolio API endpoints
 export const studentApi = {
   getStats: () => apiRequest('/dashboard/stats'),
   getStudents: (q = '', className = '', includeArchived = false) => {
@@ -44,4 +44,26 @@ export const studentApi = {
     body: JSON.stringify({ is_active })
   }),
   getClasses: () => apiRequest('/classes')
+};
+
+// Daily Attendance & Reports API endpoints
+export const attendanceApi = {
+  getDailyAttendance: (date = '', className = '') => {
+    const params = new URLSearchParams();
+    if (date) params.append('date', date);
+    if (className && className !== 'All Classes') params.append('class_name', className);
+    return apiRequest(`/attendance?${params.toString()}`);
+  },
+  saveBulkAttendance: (date, records) => apiRequest('/attendance/bulk', {
+    method: 'POST',
+    body: JSON.stringify({ date, records })
+  }),
+  getStudentHistory: (studentId) => apiRequest(`/students/${studentId}/attendance`),
+  getReport: (startDate = '', endDate = '', className = '') => {
+    const params = new URLSearchParams();
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    if (className && className !== 'All Classes') params.append('class_name', className);
+    return apiRequest(`/reports/attendance?${params.toString()}`);
+  }
 };

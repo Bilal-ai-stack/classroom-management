@@ -671,3 +671,40 @@ a {
   font-weight: 600;
   animation: toastSlide 0.35s var(--ease-spring);
 }
+
+/* Progress Bar */
+.progress-container {
+  width: 100%;
+  background: var(--border);
+  height: 8px;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin-top: 0.35rem;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: linear-gradient(90deg, #2563EB, #3B82F6);
+  transition: width 0.5s var(--ease-smooth);
+}
+
+.progress-fill.success {
+  background: linear-gradient(90deg, #16A34A, #22C55E);
+}
+
+/* History Log List */
+.history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm);
+  background: var(--border-light);
+  margin-bottom: 0.5rem;
+  transition: background-color 0.2s ease;
+}
+
+.history-item:hover {
+  background: #E2E8F0;
+}
