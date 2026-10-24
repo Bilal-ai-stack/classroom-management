@@ -13,13 +13,16 @@
 │   📋 Backlog    │ 🎯 Ready (To Do)│ 🚧 In Progress  │ 👀 In Review/PR │     ✅ Done     │
 │                 │   (WIP Max: 3)  │   (WIP Max: 2)  │   (WIP Max: 2)  │                 │
 ├─────────────────┼─────────────────┼─────────────────┼─────────────────┼─────────────────┤
-│ • Issue #4      │ • Issue #1      │                 │                 │                 │
-│ • Issue #5      │ • Issue #2      │                 │                 │                 │
-│ • Issue #6      │ • Issue #3      │                 │                 │                 │
-│ • Issue #7      │                 │                 │                 │                 │
-│ • Issue #8      │                 │                 │                 │                 │
-│ • Issue #9      │                 │                 │                 │                 │
-│ • Issue #10     │                 │                 │                 │                 │
+│                 │                 │                 │                 │ • Issue #1      │
+│                 │                 │                 │                 │ • Issue #2      │
+│                 │                 │                 │                 │ • Issue #3      │
+│                 │                 │                 │                 │ • Issue #4      │
+│                 │                 │                 │                 │ • Issue #5      │
+│                 │                 │                 │                 │ • Issue #6      │
+│                 │                 │                 │                 │ • Issue #7      │
+│                 │                 │                 │                 │ • Issue #8      │
+│                 │                 │                 │                 │ • Issue #9      │
+│                 │                 │                 │                 │ • Issue #10     │
 └─────────────────┴─────────────────┴─────────────────┴─────────────────┴─────────────────┘
 ```
 
@@ -29,40 +32,38 @@
 
 ### 1. 📋 Backlog (Future Work)
 - **Policy:** Contains scoped issues not yet scheduled for immediate development.
-- **Current Cards:**
-  - `[#4]` [Epic] Attendance Data Model & Bulk REST Endpoints *(Phase 2)*
-  - `[#5]` [Feature] Daily Attendance Roster UI *(Phase 2)*
-  - `[#6]` [Feature] Attendance Analytics & Reports *(Phase 2)*
-  - `[#7]` [Epic] Local Face Detection Service (OpenCV) *(Phase 3)*
-  - `[#8]` [Feature] Teacher Photo-Verification Review Screen *(Phase 3)*
-  - `[#9]` [Testing] Backend Pytest Suite & Validation Hardening *(Phase 4)*
-  - `[#10]` [Documentation] Complete Setup Guide & Seed Data *(Phase 4)*
+- **Current Cards:** All primary roadmap epics (#1 through #10) have been completed!
 
 ### 2. 🎯 Ready / To Do (WIP Limit: 3)
 - **Policy:** Clear acceptance criteria defined, dependencies resolved, ready for immediate assignment.
-- **Current Cards (Phase 1 MVP):**
-  - [ ] `[#1]` **[Epic] Backend Foundation & Student CRUD API**  
-    *Assignee:* Bilal Ahmad | *Branch:* `feature/phase1-student-portfolio`
-  - [ ] `[#2]` **[Epic] React + Vite Frontend Scaffolding & Light UI Design System**  
-    *Assignee:* Bilal Ahmad | *Branch:* `feature/phase1-student-portfolio`
-  - [ ] `[#3]` **[Feature] Student Management & Portfolio View**  
-    *Assignee:* Bilal Ahmad | *Branch:* `feature/phase1-student-portfolio`
+- **Current Cards:** None
 
 ### 3. 🚧 In Progress (WIP Limit: 2)
-- **Policy:** Actively being coded on the designated feature branch. A developer should not work on more than 2 items simultaneously to avoid context switching.
-- **Current Cards:** None (Ready to move Issue #1 & #2 upon kickoff)
+- **Policy:** Actively being coded on the designated feature branch.
+- **Current Cards:** None
 
 ### 4. 👀 In Review / PR (WIP Limit: 2)
 - **Policy:** Code complete, tests passing locally, PR opened against `develop`.
 - **Review Checklist:**
-  - [ ] Linting & automated CI pass
-  - [ ] No biometric recognition code introduced (ethical policy)
-  - [ ] Tested on Windows / PowerShell
+  - [x] Linting & automated CI pass
+  - [x] No biometric recognition code introduced (ethical policy)
+  - [x] Tested on Windows / PowerShell
+  - [x] Docker containerization & Docker Hub workflow configured
 
 ### 5. ✅ Done
 - **Policy:** PR reviewed, approved, merged into `develop` (or `main`), acceptance criteria verified.
 - **Current Cards:**
   - [x] Initial GitHub project configuration & governance setup (`.github/`, templates, CI, Kanban definitions)
+  - [x] `[#1]` [Epic] Backend Foundation & Student CRUD API *(Phase 1)*
+  - [x] `[#2]` [Epic] React + Vite Frontend Scaffolding & Design System *(Phase 1)*
+  - [x] `[#3]` [Feature] Student Management & Portfolio View *(Phase 1)*
+  - [x] `[#4]` [Epic] Attendance Data Model & Bulk REST Endpoints *(Phase 2)*
+  - [x] `[#5]` [Feature] Daily Attendance Roster UI *(Phase 2)*
+  - [x] `[#6]` [Feature] Attendance Analytics & CSV Reports *(Phase 2)*
+  - [x] `[#7]` [Epic] Local Face Detection Service (OpenCV) *(Phase 3)*
+  - [x] `[#8]` [Feature] Teacher Photo-Verification Review Screen *(Phase 3)*
+  - [x] `[#9]` [Testing] Backend Pytest Suite (18/18 passing) & Validation Hardening *(Phase 4)*
+  - [x] `[#10]` [Documentation & Infra] Complete Setup Guide, Docker Compose & Docker Hub CI/CD *(Phase 4)*
 
 ---
 
