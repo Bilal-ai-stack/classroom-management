@@ -25,7 +25,8 @@ export default function Modal({ isOpen, onClose, title, children }) {
           <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>{title}</h3>
           <button
             onClick={onClose}
-            style={{ color: 'var(--text-muted)', padding: '0.25rem', borderRadius: '6px' }}
+            className="modal-close-btn"
+            aria-label="Close dialog"
           >
             <X size={20} />
           </button>
