@@ -1,7 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Users, CalendarCheck, Camera, BarChart3, School, Sun, Moon } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Users,
+  CalendarCheck,
+  Camera,
+  BarChart3,
+  School,
+  Sun,
+  Moon,
+  ShieldCheck,
+  UserCheck,
+  LogOut,
+  LogIn
+} from 'lucide-react';
 
-export default function Navbar({ activeTab, setActiveTab }) {
+export default function Navbar({
+  activeTab,
+  setActiveTab,
+  teacherProfile,
+  onOpenAuthModal,
+  onOpenPrivacyModal,
+  onLogout
+}) {
   const [isDarkMode, setIsDarkMode] = useState(() => {
     return localStorage.getItem('classroom_theme') === 'dark';
   });
@@ -24,8 +44,8 @@ export default function Navbar({ activeTab, setActiveTab }) {
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'students', label: 'Students', icon: Users },
     { id: 'attendance', label: 'Daily Attendance', icon: CalendarCheck },
-    { id: 'photo_review', label: 'Photo Review', icon: Camera },
-    { id: 'reports', label: 'Reports', icon: BarChart3 }
+    { id: 'photo-review', label: 'Photo Review', icon: Camera },
+    { id: 'reports', label: 'Reports', icon: BarChart3 },
   ];
 
   return (
@@ -41,7 +61,7 @@ export default function Navbar({ activeTab, setActiveTab }) {
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
           <nav className="nav-links">
             {navItems.map((item) => {
               const Icon = item.icon;
@@ -60,15 +80,70 @@ export default function Navbar({ activeTab, setActiveTab }) {
             })}
           </nav>
 
+          {/* Privacy & Ethics Policy Modal Trigger */}
+          <button
+            onClick={onOpenPrivacyModal}
+            className="btn btn-secondary btn-sm"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.75rem' }}
+            title="Privacy & Data Ethics Controls"
+            aria-label="Privacy Controls"
+          >
+            <ShieldCheck size={16} color="#10B981" />
+            <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Privacy</span>
+          </button>
+
+          {/* Teacher Profile / Auth Badge */}
+          {teacherProfile?.authenticated ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  padding: '0.35rem 0.65rem',
+                  background: 'var(--primary-light)',
+                  border: '1px solid var(--primary-border)',
+                  borderRadius: '20px',
+                  fontSize: '0.82rem',
+                  fontWeight: 600,
+                  color: 'var(--primary)'
+                }}
+                title={`Signed in as ${teacherProfile.name} (${teacherProfile.role})`}
+              >
+                <UserCheck size={15} />
+                <span>{teacherProfile.name.split(' ')[0]}</span>
+              </div>
+              <button
+                onClick={onLogout}
+                className="btn btn-secondary btn-sm"
+                style={{ borderRadius: '50%', width: '34px', height: '34px', padding: 0 }}
+                title="Sign out of ClassroomOS"
+                aria-label="Sign out"
+              >
+                <LogOut size={14} color="#EF4444" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={onOpenAuthModal}
+              className="btn btn-primary btn-sm"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.75rem' }}
+              title="Educator Login"
+            >
+              <LogIn size={15} />
+              <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Sign In</span>
+            </button>
+          )}
+
           {/* Dark / Light Mode Switch */}
           <button
             onClick={toggleTheme}
             className="btn btn-secondary btn-sm"
-            style={{ borderRadius: '50%', width: '38px', height: '38px', padding: 0 }}
+            style={{ borderRadius: '50%', width: '36px', height: '36px', padding: 0 }}
             title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
             aria-label="Toggle color theme"
           >
-            {isDarkMode ? <Sun size={17} color="#FBBF24" /> : <Moon size={17} />}
+            {isDarkMode ? <Sun size={16} color="#FBBF24" /> : <Moon size={16} />}
           </button>
         </div>
       </div>

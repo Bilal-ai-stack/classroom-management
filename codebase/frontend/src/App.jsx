@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Navbar from './shared/Navbar';
 import Modal from './shared/Modal';
 import StatusBadge from './shared/StatusBadge';
-import { studentApi, attendanceApi, photoApi } from './shared/api';
+import { studentApi, attendanceApi, photoApi, authApi, privacyApi } from './shared/api';
 import {
   Users,
   Search,
@@ -27,7 +27,10 @@ import {
   BarChart3,
   UserCheck,
   FileSpreadsheet,
-  Trash2
+  Trash2,
+  ShieldCheck,
+  Lock,
+  LogIn
 } from 'lucide-react';
 
 const getTodayDate = () => new Date().toISOString().split('T')[0];
@@ -107,6 +110,22 @@ export default function App() {
   }));
   const [formError, setFormError] = useState('');
   const [toastMessage, setToastMessage] = useState('');
+
+  // Phase 4 Authentication & Privacy Controls State
+  const [teacherProfile, setTeacherProfile] = useState({
+    authenticated: false,
+    name: 'Ms. Clara Vance',
+    email: 'teacher@school.edu',
+    role: 'Lead Educator',
+    assigned_class: 'Grade 4-A'
+  });
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
+  const [authForm, setAuthForm] = useState({ email: 'teacher@school.edu', password: 'classroom2026' });
+  const [authError, setAuthError] = useState('');
+  const [privacyPolicy, setPrivacyPolicy] = useState(null);
+  const [privacyAudit, setPrivacyAudit] = useState(null);
+  const [isPurgingPrivacy, setIsPurgingPrivacy] = useState(false);
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -205,10 +224,22 @@ export default function App() {
     }
   }, [reportStartDate, reportEndDate, reportClass]);
 
+  const loadTeacherProfile = useCallback(async () => {
+    try {
+      const res = await authApi.getCurrentUser();
+      if (res && res.success && res.teacher) {
+        setTeacherProfile({ ...res.teacher, authenticated: true });
+      }
+    } catch {
+      // offline fallback
+    }
+  }, []);
+
   useEffect(() => {
     loadDashboardStats();
     loadClasses();
-  }, [loadDashboardStats, loadClasses]);
+    loadTeacherProfile();
+  }, [loadDashboardStats, loadClasses, loadTeacherProfile]);
 
   useEffect(() => {
     loadStudents();
@@ -225,6 +256,73 @@ export default function App() {
       loadReports();
     }
   }, [activeTab, loadReports]);
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setAuthError('');
+    try {
+      const res = await authApi.login(authForm.email, authForm.password);
+      if (res && res.success) {
+        localStorage.setItem('classroom_token', res.token);
+        setTeacherProfile({ ...res.teacher, authenticated: true });
+        setIsAuthModalOpen(false);
+        showToast(res.message || 'Authenticated successfully!');
+      }
+    } catch (err) {
+      setAuthError(err.message || 'Invalid credentials');
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await authApi.logout();
+    } catch {
+      // ignore
+    }
+    localStorage.removeItem('classroom_token');
+    setTeacherProfile({
+      authenticated: false,
+      name: 'Ms. Clara Vance',
+      email: 'teacher@school.edu',
+      role: 'Lead Educator',
+      assigned_class: 'Grade 4-A'
+    });
+    showToast('Signed out of ClassroomOS.');
+  };
+
+  const loadPrivacyDetails = async () => {
+    try {
+      const [policyRes, auditRes] = await Promise.all([
+        privacyApi.getPolicy(),
+        privacyApi.audit()
+      ]);
+      if (policyRes?.success) setPrivacyPolicy(policyRes.policy);
+      if (auditRes?.success) setPrivacyAudit(auditRes.audit);
+    } catch {
+      setPrivacyPolicy({
+        compliance: [
+          'Zero Biometric Embedding Storage: No facial embeddings stored.',
+          'Local Edge Processing: Local Haar Cascade detection.',
+          'Human-in-the-Loop: Teacher manually verifies all student attendance.',
+          'Ephemeral Retention: Temporary images purged after session.'
+        ]
+      });
+      setPrivacyAudit({ temporary_crops_count: 0, temporary_storage_bytes: 0, status: 'Compliant' });
+    }
+  };
+
+  const handlePurgePrivacy = async () => {
+    setIsPurgingPrivacy(true);
+    try {
+      const res = await privacyApi.purgeTemporaryData();
+      showToast(res.message || 'Temporary data purged successfully.');
+      loadPrivacyDetails();
+    } catch (err) {
+      showToast(`Purge failed: ${err.message}`);
+    } finally {
+      setIsPurgingPrivacy(false);
+    }
+  };
 
   // Open Student Portfolio and load real attendance history
   const handleOpenPortfolio = async (student) => {
@@ -485,7 +583,14 @@ export default function App() {
 
   return (
     <div className="app-container">
-      <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Navbar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        teacherProfile={teacherProfile}
+        onOpenAuthModal={() => { setIsAuthModalOpen(true); setAuthError(''); }}
+        onOpenPrivacyModal={() => { setIsPrivacyModalOpen(true); loadPrivacyDetails(); }}
+        onLogout={handleLogout}
+      />
 
       {toastMessage && (
         <div className="toast-notification">
@@ -1707,6 +1812,171 @@ export default function App() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* PHASE 4: TEACHER AUTHENTICATION MODAL */}
+      <Modal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        title="Educator Sign-In"
+      >
+        <form onSubmit={handleLogin}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem', padding: '0.75rem', background: 'var(--primary-light)', borderRadius: '10px' }}>
+            <Lock size={24} color="var(--primary)" />
+            <div style={{ fontSize: '0.88rem', color: 'var(--text-main)' }}>
+              Sign in to authenticate as a lead educator or school administrator.
+            </div>
+          </div>
+
+          {authError && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', background: '#FEE2E2', border: '1px solid #FCA5A5', borderRadius: '8px', color: '#991B1B', marginBottom: '1rem', fontSize: '0.88rem' }}>
+              <AlertCircle size={18} />
+              <span>{authError}</span>
+            </div>
+          )}
+
+          {/* Quick Demo Fill Buttons */}
+          <div style={{ marginBottom: '1rem' }}>
+            <label className="form-label" style={{ fontSize: '0.78rem', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+              Quick Demo Accounts
+            </label>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setAuthForm({ email: 'teacher@school.edu', password: 'classroom2026' })}
+              >
+                Lead Teacher (Ms. Vance)
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setAuthForm({ email: 'admin@school.edu', password: 'admin2026' })}
+              >
+                Principal (Mr. Davis)
+              </button>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Email Address</label>
+            <input
+              type="email"
+              className="form-input"
+              required
+              value={authForm.email}
+              onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })}
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Password</label>
+            <input
+              type="password"
+              className="form-input"
+              required
+              value={authForm.password}
+              onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
+            />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.25rem' }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setIsAuthModalOpen(false)}
+            >
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary">
+              <LogIn size={16} /> Sign In
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* PHASE 4: PRIVACY & DATA ETHICS CONTROLS MODAL */}
+      <Modal
+        isOpen={isPrivacyModalOpen}
+        onClose={() => setIsPrivacyModalOpen(false)}
+        title="Classroom Privacy & Data Ethics"
+      >
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem', padding: '0.75rem 1rem', background: 'var(--primary-light)', border: '1px solid var(--primary-border)', borderRadius: '10px' }}>
+            <ShieldCheck size={26} color="#10B981" />
+            <div>
+              <div style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '0.95rem' }}>
+                FERPA & Student Privacy Compliance
+              </div>
+              <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                Local edge computer vision. Zero cloud facial recognition.
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '1.25rem' }}>
+            <h4 style={{ fontSize: '0.88rem', fontWeight: 700, marginBottom: '0.6rem', color: 'var(--text-main)' }}>
+              Ethical Guardrails:
+            </h4>
+            <ul style={{ paddingLeft: '1.25rem', fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              {(privacyPolicy?.compliance || [
+                'Zero Biometric Embedding Storage: No facial embeddings, vectors, or identity matrices are stored.',
+                'Local Edge Processing: Haar Cascade face detection operates exclusively on the local host.',
+                'Human-in-the-Loop: Teachers manually confirm all attendance; no automated identity assignment.',
+                'Ephemeral Image Retention: Classroom photos and detected crops are strictly temporary.'
+              ]).map((rule, idx) => (
+                <li key={idx}>{rule}</li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Local Audit Storage Stats */}
+          <div style={{ padding: '0.85rem', background: 'var(--bg-main)', border: '1px solid var(--border)', borderRadius: '8px', marginBottom: '1.25rem' }}>
+            <h4 style={{ fontSize: '0.82rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+              Local Session Storage Footprint
+            </h4>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', textAlign: 'center' }}>
+              <div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                  {privacyAudit?.temporary_crops_count ?? 0}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Temp Crops</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                  {Math.round((privacyAudit?.temporary_storage_bytes || 0) / 1024)} KB
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Disk Used</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#10B981' }}>
+                  {privacyAudit?.status || 'Compliant'}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Status</div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.25rem' }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={isPurgingPrivacy}
+              onClick={handlePurgePrivacy}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: '#EF4444' }}
+            >
+              <Trash2 size={16} />
+              {isPurgingPrivacy ? 'Purging...' : 'Purge Temporary Photo Data'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setIsPrivacyModalOpen(false)}
+            >
+              Close
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

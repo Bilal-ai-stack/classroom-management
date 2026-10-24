@@ -1,9 +1,7 @@
 name: Publish Docker Images
 
+# Keep Docker Hub deployment pending until manually triggered by user
 on:
-  push:
-    branches: [ main ]
-    tags: [ 'v*.*.*' ]
   workflow_dispatch:
     inputs:
       dockerhub_username:

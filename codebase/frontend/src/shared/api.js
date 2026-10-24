@@ -3,6 +3,7 @@ const BASE_URL = '/api';
 export async function apiRequest(endpoint, options = {}) {
   const url = `${BASE_URL}${endpoint}`;
   const isFormData = options.body instanceof FormData;
+  const token = localStorage.getItem('classroom_token');
 
   const headers = isFormData
     ? { ...(options.headers || {}) }
@@ -10,6 +11,10 @@ export async function apiRequest(endpoint, options = {}) {
         'Content-Type': 'application/json',
         ...(options.headers || {})
       };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
 
   try {
     const res = await fetch(url, { ...options, headers });
@@ -90,3 +95,25 @@ export const photoApi = {
     method: 'DELETE'
   })
 };
+
+// Phase 4 Teacher Authentication & Session API
+export const authApi = {
+  login: (email, password) => apiRequest('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password })
+  }),
+  getCurrentUser: () => apiRequest('/auth/me'),
+  logout: () => apiRequest('/auth/logout', {
+    method: 'POST'
+  })
+};
+
+// Phase 4 Privacy & Audit Controls API
+export const privacyApi = {
+  getPolicy: () => apiRequest('/privacy/policy'),
+  audit: () => apiRequest('/privacy/audit'),
+  purgeTemporaryData: () => apiRequest('/privacy/purge', {
+    method: 'POST'
+  })
+};
+

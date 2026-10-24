@@ -8,6 +8,9 @@ from phase1_students.models import Student
 from phase2_attendance.models import Attendance
 from phase2_attendance.routes import attendance_bp
 from phase3_photo.routes import photo_bp
+from phase4_quality.auth import auth_bp
+from phase4_quality.privacy import privacy_bp
+from phase4_quality.errors import register_error_handlers
 
 def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
@@ -31,6 +34,11 @@ def create_app(test_config=None):
     app.register_blueprint(students_bp, url_prefix='/api')
     app.register_blueprint(attendance_bp, url_prefix='/api')
     app.register_blueprint(photo_bp, url_prefix='/api')
+    app.register_blueprint(auth_bp, url_prefix='/api')
+    app.register_blueprint(privacy_bp, url_prefix='/api')
+
+    # Register Global JSON Error Handlers
+    register_error_handlers(app)
 
     with app.app_context():
         db.create_all()
