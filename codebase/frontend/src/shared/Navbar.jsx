@@ -11,7 +11,9 @@ import {
   ShieldCheck,
   UserCheck,
   LogOut,
-  LogIn
+  LogIn,
+  Menu,
+  X as CloseIcon
 } from 'lucide-react';
 
 export default function Navbar({
@@ -25,6 +27,7 @@ export default function Navbar({
   const [isDarkMode, setIsDarkMode] = useState(() => {
     return localStorage.getItem('classroom_theme') === 'dark';
   });
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     if (isDarkMode) {
@@ -36,23 +39,36 @@ export default function Navbar({
     }
   }, [isDarkMode]);
 
-  const toggleTheme = () => {
-    setIsDarkMode((prev) => !prev);
+  // Close mobile menu on tab change
+  const handleTabChange = (id) => {
+    setActiveTab(id);
+    setMobileOpen(false);
   };
 
+  const toggleTheme = () => setIsDarkMode((prev) => !prev);
+
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'students', label: 'Students', icon: Users },
-    { id: 'attendance', label: 'Daily Attendance', icon: CalendarCheck },
-    { id: 'photo-review', label: 'Photo Review', icon: Camera },
-    { id: 'reports', label: 'Reports', icon: BarChart3 },
+    { id: 'dashboard',    label: 'Dashboard',       icon: LayoutDashboard },
+    { id: 'students',     label: 'Students',         icon: Users            },
+    { id: 'attendance',   label: 'Attendance',       icon: CalendarCheck    },
+    { id: 'photo-review', label: 'Photo Review',     icon: Camera           },
+    { id: 'reports',      label: 'Reports',          icon: BarChart3        },
   ];
 
   return (
-    <header className="navbar">
+    <header className="navbar" role="banner">
       <div className="navbar-inner">
-        <div className="brand-link" style={{ cursor: 'pointer' }} onClick={() => setActiveTab('dashboard')}>
-          <div className="brand-icon-box">
+
+        {/* Brand */}
+        <div
+          className="brand-link"
+          role="link"
+          tabIndex={0}
+          aria-label="Go to Dashboard"
+          onClick={() => handleTabChange('dashboard')}
+          onKeyDown={(e) => e.key === 'Enter' && handleTabChange('dashboard')}
+        >
+          <div className="brand-icon-box" aria-hidden="true">
             <School size={22} />
           </div>
           <div className="brand-text">
@@ -61,38 +77,42 @@ export default function Navbar({
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-          <nav className="nav-links">
+        {/* Right-side controls (desktop) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+
+          {/* Desktop navigation links */}
+          <nav className="nav-links" aria-label="Main navigation" id="main-nav">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
               return (
                 <button
                   key={item.id}
-                  onClick={() => setActiveTab(item.id)}
+                  onClick={() => handleTabChange(item.id)}
                   className={`nav-btn ${isActive ? 'active' : ''}`}
                   aria-label={item.label}
+                  aria-current={isActive ? 'page' : undefined}
                 >
-                  <Icon size={18} className="nav-icon" />
+                  <Icon size={18} className="nav-icon" aria-hidden="true" />
                   <span>{item.label}</span>
                 </button>
               );
             })}
           </nav>
 
-          {/* Privacy & Ethics Policy Modal Trigger */}
+          {/* Privacy button */}
           <button
             onClick={onOpenPrivacyModal}
             className="btn btn-secondary btn-sm"
             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.75rem' }}
             title="Privacy & Data Ethics Controls"
-            aria-label="Privacy Controls"
+            aria-label="Open Privacy Controls"
           >
-            <ShieldCheck size={16} color="#10B981" />
+            <ShieldCheck size={16} color="#10B981" aria-hidden="true" />
             <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Privacy</span>
           </button>
 
-          {/* Teacher Profile / Auth Badge */}
+          {/* Teacher Profile / Auth */}
           {teacherProfile?.authenticated ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <div
@@ -109,8 +129,9 @@ export default function Navbar({
                   color: 'var(--primary)'
                 }}
                 title={`Signed in as ${teacherProfile.name} (${teacherProfile.role})`}
+                aria-label={`Signed in as ${teacherProfile.name}`}
               >
-                <UserCheck size={15} />
+                <UserCheck size={15} aria-hidden="true" />
                 <span>{teacherProfile.name.split(' ')[0]}</span>
               </div>
               <button
@@ -120,7 +141,7 @@ export default function Navbar({
                 title="Sign out of ClassroomOS"
                 aria-label="Sign out"
               >
-                <LogOut size={14} color="#EF4444" />
+                <LogOut size={14} color="#EF4444" aria-hidden="true" />
               </button>
             </div>
           ) : (
@@ -129,8 +150,9 @@ export default function Navbar({
               className="btn btn-primary btn-sm"
               style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.75rem' }}
               title="Educator Login"
+              aria-label="Sign in as Teacher"
             >
-              <LogIn size={15} />
+              <LogIn size={15} aria-hidden="true" />
               <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Sign In</span>
             </button>
           )}
@@ -141,12 +163,53 @@ export default function Navbar({
             className="btn btn-secondary btn-sm"
             style={{ borderRadius: '50%', width: '36px', height: '36px', padding: 0 }}
             title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-            aria-label="Toggle color theme"
+            aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
           >
-            {isDarkMode ? <Sun size={16} color="#FBBF24" /> : <Moon size={16} />}
+            {isDarkMode
+              ? <Sun size={16} color="#FBBF24" aria-hidden="true" />
+              : <Moon size={16} aria-hidden="true" />}
+          </button>
+
+          {/* Hamburger — mobile only */}
+          <button
+            className="btn btn-secondary btn-sm hamburger-btn"
+            onClick={() => setMobileOpen((o) => !o)}
+            aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            aria-expanded={mobileOpen}
+            aria-controls="mobile-nav"
+            style={{ borderRadius: '50%', width: '36px', height: '36px', padding: 0 }}
+          >
+            {mobileOpen
+              ? <CloseIcon size={16} aria-hidden="true" />
+              : <Menu size={16} aria-hidden="true" />}
           </button>
         </div>
       </div>
+
+      {/* Mobile dropdown nav */}
+      {mobileOpen && (
+        <nav
+          id="mobile-nav"
+          className="mobile-nav-menu"
+          aria-label="Mobile navigation"
+        >
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleTabChange(item.id)}
+                className={`mobile-nav-item ${isActive ? 'active' : ''}`}
+                aria-current={isActive ? 'page' : undefined}
+              >
+                <Icon size={20} aria-hidden="true" />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+      )}
     </header>
   );
 }

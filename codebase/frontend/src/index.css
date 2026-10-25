@@ -777,3 +777,345 @@ a {
 .history-item:hover {
   background: #E2E8F0;
 }
+
+/* ============================================================
+   MOBILE & RESPONSIVE STYLES
+   ============================================================ */
+
+/* Tablet — ≤ 1024px */
+@media (max-width: 1024px) {
+  .main-content {
+    padding: 1.5rem 1.25rem 3rem;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .navbar-inner {
+    padding: 0.75rem 1.25rem;
+  }
+}
+
+/* Mobile — ≤ 768px */
+@media (max-width: 768px) {
+  /* Navbar: collapse to icon-only on small screens */
+  .navbar-inner {
+    padding: 0.65rem 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .nav-links {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+    gap: 0.2rem;
+    padding: 0.4rem 0;
+    border-top: 1px solid var(--border);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .nav-links::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-btn {
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.5rem 0.7rem;
+    font-size: 0.72rem;
+    white-space: nowrap;
+    min-width: 60px;
+  }
+
+  .nav-btn span {
+    display: block;
+    font-size: 0.68rem;
+  }
+
+  .nav-btn:hover {
+    transform: translateY(-1px);
+  }
+
+  /* Brand */
+  .brand-text span:first-child {
+    font-size: 1.05rem;
+  }
+
+  /* Main content */
+  .main-content {
+    padding: 1rem 0.9rem 3rem;
+  }
+
+  /* Stats: 2 columns → 1 column on very small */
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.85rem;
+  }
+
+  .stat-card {
+    padding: 1rem 1.1rem;
+    gap: 0.85rem;
+  }
+
+  .stat-val {
+    font-size: 1.5rem;
+  }
+
+  .stat-icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* Cards */
+  .card {
+    padding: 1.25rem;
+  }
+
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .card-title {
+    font-size: 1.05rem;
+  }
+
+  /* Tables: enable horizontal scroll */
+  .table-container {
+    border-radius: var(--radius-md);
+  }
+
+  .custom-table th,
+  .custom-table td {
+    padding: 0.75rem 0.85rem;
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+
+  /* Modals: full-screen on mobile */
+  .modal-overlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .modal-content {
+    max-height: 92vh;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    padding: 1.5rem 1.25rem;
+  }
+
+  /* Search box */
+  .search-box {
+    max-width: 100%;
+  }
+
+  /* Status toggle buttons */
+  .status-toggle-btn {
+    padding: 0.35rem 0.6rem;
+    font-size: 0.74rem;
+  }
+
+  /* Quick action items */
+  .quick-action-item {
+    padding: 0.85rem 1rem;
+    font-size: 0.88rem;
+  }
+
+  /* Toast: full width on mobile */
+  .toast-notification {
+    left: 1rem;
+    right: 1rem;
+    width: auto;
+  }
+
+  /* Buttons */
+  .btn {
+    padding: 0.6rem 1rem;
+    font-size: 0.88rem;
+  }
+}
+
+/* Small Mobile — ≤ 480px */
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.65rem;
+  }
+
+  .stat-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.9rem;
+  }
+
+  .stat-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+  }
+
+  .stat-val {
+    font-size: 1.35rem;
+  }
+
+  .stat-label {
+    font-size: 0.78rem;
+  }
+
+  .brand-badge {
+    display: none; /* hide "Pro" badge on tiny screens to save space */
+  }
+
+  .brand-text span:first-child {
+    font-size: 0.95rem;
+  }
+
+  .card {
+    padding: 1rem;
+  }
+
+  .card-title {
+    font-size: 1rem;
+  }
+
+  .modal-content {
+    padding: 1.25rem 1rem;
+  }
+}
+
+/* Touch device: reduce hover lift to avoid sticky hover states */
+@media (hover: none) {
+  .stat-card:hover,
+  .card:hover,
+  .btn:hover,
+  .nav-btn:hover,
+  .quick-action-item:hover {
+    transform: none;
+  }
+
+  .stat-card:active {
+    transform: scale(0.98);
+  }
+
+  .btn:active {
+    transform: scale(0.96);
+  }
+}
+
+/* Landscape mobile: keep navbar compact */
+@media (max-width: 768px) and (orientation: landscape) {
+  .nav-links {
+    padding: 0.3rem 0;
+  }
+
+  .nav-btn {
+    flex-direction: row;
+    font-size: 0.78rem;
+  }
+}
+
+/* Safe area insets for notched phones (iOS) */
+@supports (padding: max(0px)) {
+  .navbar {
+    padding-left: max(0px, env(safe-area-inset-left));
+    padding-right: max(0px, env(safe-area-inset-right));
+  }
+
+  .main-content {
+    padding-bottom: max(3rem, calc(3rem + env(safe-area-inset-bottom)));
+  }
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.1ms !important;
+  }
+}
+
+/* Print styles — clean output */
+@media print {
+  .navbar,
+  .btn,
+  .toast-notification {
+    display: none !important;
+  }
+
+  .main-content {
+    padding: 0;
+    max-width: 100%;
+  }
+
+  .card,
+  .table-container {
+    box-shadow: none;
+    border: 1px solid #ccc;
+  }
+}
+
+/* ============================================================
+   HAMBURGER BUTTON & MOBILE NAV DROPDOWN
+   ============================================================ */
+
+/* Hide hamburger on desktop, show on mobile */
+.hamburger-btn {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .hamburger-btn {
+    display: flex;
+  }
+
+  /* Hide the horizontal nav-links on mobile (we use dropdown instead) */
+  .navbar-inner .nav-links {
+    display: none;
+  }
+}
+
+/* Mobile full-width dropdown nav */
+.mobile-nav-menu {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+  animation: floatUp 0.2s var(--ease-smooth);
+  padding: 0.5rem 0.75rem 0.75rem;
+  gap: 0.25rem;
+}
+
+.mobile-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.8rem 1rem;
+  border-radius: var(--radius-md);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  text-align: left;
+  width: 100%;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s var(--ease-spring);
+}
+
+.mobile-nav-item:hover {
+  background: var(--primary-light);
+  color: var(--primary);
+  transform: translateX(4px);
+}
+
+.mobile-nav-item.active {
+  background: var(--primary-light);
+  color: var(--primary);
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px var(--primary-border);
+}
