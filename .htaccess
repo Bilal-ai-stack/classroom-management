@@ -1,0 +1,51 @@
+# ----------------------------------------------------------------------
+# ClassroomOS — Hostinger Apache / LiteSpeed Configuration
+# ----------------------------------------------------------------------
+
+# 1. Default Directory Index
+DirectoryIndex index.html
+
+# 2. Enable URL Rewriting for Single Page Application (SPA)
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Protect sensitive directories & files
+  RewriteRule ^\.git - [F,L]
+  RewriteRule ^codebase/backend - [F,L]
+  RewriteRule ^setup - [F,L]
+
+  # Don't rewrite real files or directories
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Route all other URLs to index.html
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+# 3. Proper MIME Types
+<IfModule mod_mime.c>
+  AddType text/html .html
+  AddType text/css .css
+  AddType application/javascript .js
+  AddType image/svg+xml .svg
+  AddType image/x-icon .ico
+</IfModule>
+
+# 4. Browser Caching for Performance
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresDefault "access plus 1 month"
+  ExpiresByType text/html "access plus 0 seconds"
+  ExpiresByType text/css "access plus 1 year"
+  ExpiresByType application/javascript "access plus 1 year"
+  ExpiresByType image/svg+xml "access plus 1 year"
+</IfModule>
+
+# 5. Security Headers
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
