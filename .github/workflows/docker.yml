@@ -1,17 +1,14 @@
 name: Publish Docker Images
 
-# Keep Docker Hub deployment pending until manually triggered by user
 on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*.*.*' ]
   workflow_dispatch:
-    inputs:
-      dockerhub_username:
-        description: 'Docker Hub Username (optional if secret is set)'
-        required: false
-        default: ''
 
 jobs:
   build-and-push:
-    name: Build & Push Docker Images
+    name: Build & Push Docker Images to Docker Hub & GHCR
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -21,34 +18,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up QEMU
+      - name: Set up QEMU (multi-platform support)
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Determine Docker Hub Credentials
-        id: dockerhub-check
-        run: |
-          DH_USER="${{ secrets.DOCKERHUB_USERNAME }}"
-          if [ -z "$DH_USER" ]; then
-            DH_USER="${{ inputs.dockerhub_username }}"
-          fi
-          if [ -n "$DH_USER" ] && [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
-            echo "has_dockerhub=true" >> $GITHUB_OUTPUT
-            echo "username=$DH_USER" >> $GITHUB_OUTPUT
-          else
-            echo "has_dockerhub=false" >> $GITHUB_OUTPUT
-            echo "username=" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Log in to Docker Hub
-        if: steps.dockerhub-check.outputs.has_dockerhub == 'true'
+      # ── Docker Hub Login ───────────────────────────────────────────
+      - name: Log in to Docker Hub (bilal0313)
         uses: docker/login-action@v3
         with:
-          username: ${{ steps.dockerhub-check.outputs.username }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # ── GitHub Container Registry Login ───────────────────────────
       - name: Log in to GitHub Container Registry (ghcr.io)
         uses: docker/login-action@v3
         with:
@@ -56,21 +39,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # ----------------------------------------------------
-      # 1. Backend Image Build & Push
-      # ----------------------------------------------------
-      - name: Extract metadata for Backend
+      # ── 1. Backend Image ──────────────────────────────────────────
+      - name: Extract metadata — Backend
         id: meta-backend
         uses: docker/metadata-action@v5
         with:
           images: |
+            bilal0313/classroom-backend
             ghcr.io/${{ github.repository }}-backend
-            ${{ steps.dockerhub-check.outputs.has_dockerhub == 'true' && format('{0}/classroom-backend', steps.dockerhub-check.outputs.username) || '' }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix=sha-,enable=true
+            type=sha,prefix=sha-,format=short
 
-      - name: Build and push Backend Image
+      - name: Build & Push — Backend (Flask + Gunicorn)
         uses: docker/build-push-action@v5
         with:
           context: ./codebase/backend
@@ -81,21 +62,19 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # ----------------------------------------------------
-      # 2. Frontend Image Build & Push
-      # ----------------------------------------------------
-      - name: Extract metadata for Frontend
+      # ── 2. Frontend Image ─────────────────────────────────────────
+      - name: Extract metadata — Frontend
         id: meta-frontend
         uses: docker/metadata-action@v5
         with:
           images: |
+            bilal0313/classroom-frontend
             ghcr.io/${{ github.repository }}-frontend
-            ${{ steps.dockerhub-check.outputs.has_dockerhub == 'true' && format('{0}/classroom-frontend', steps.dockerhub-check.outputs.username) || '' }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix=sha-,enable=true
+            type=sha,prefix=sha-,format=short
 
-      - name: Build and push Frontend Image
+      - name: Build & Push — Frontend (React + Nginx)
         uses: docker/build-push-action@v5
         with:
           context: ./codebase/frontend
@@ -106,17 +85,18 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Publish Summary
+      # ── Summary ───────────────────────────────────────────────────
+      - name: Deployment Summary
         if: always()
         run: |
-          echo "### 🐳 Docker Images Build & Push Summary" >> $GITHUB_STEP_SUMMARY
-          echo "- **GitHub Container Registry (GHCR)**: ✅ Published" >> $GITHUB_STEP_SUMMARY
-          echo "  - \`ghcr.io/${{ github.repository }}-backend:latest\`" >> $GITHUB_STEP_SUMMARY
-          echo "  - \`ghcr.io/${{ github.repository }}-frontend:latest\`" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ steps.dockerhub-check.outputs.has_dockerhub }}" = "true" ]; then
-            echo "- **Docker Hub**: ✅ Published to user \`${{ steps.dockerhub-check.outputs.username }}\`" >> $GITHUB_STEP_SUMMARY
-            echo "  - \`${{ steps.dockerhub-check.outputs.username }}/classroom-backend:latest\`" >> $GITHUB_STEP_SUMMARY
-            echo "  - \`${{ steps.dockerhub-check.outputs.username }}/classroom-frontend:latest\`" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "- **Docker Hub**: ℹ️ Add \`DOCKERHUB_USERNAME\` and \`DOCKERHUB_TOKEN\` in GitHub repo Secrets to sync to Docker Hub" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "### 🐳 Docker Images Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### Docker Hub (bilal0313)" >> $GITHUB_STEP_SUMMARY
+          echo "- \`bilal0313/classroom-backend:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`bilal0313/classroom-frontend:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### GitHub Container Registry" >> $GITHUB_STEP_SUMMARY
+          echo "- \`ghcr.io/${{ github.repository }}-backend:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`ghcr.io/${{ github.repository }}-frontend:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Pull the stack:** \`docker compose up\` (using docker-compose.yml from the repo)" >> $GITHUB_STEP_SUMMARY
