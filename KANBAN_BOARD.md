@@ -13,7 +13,6 @@
 │   📋 Backlog    │ 🎯 Ready (To Do)│ 🚧 In Progress  │ 👀 In Review/PR │     ✅ Done     │
 │                 │   (WIP Max: 3)  │   (WIP Max: 2)  │   (WIP Max: 2)  │                 │
 ├─────────────────┼─────────────────┼─────────────────┼─────────────────┼─────────────────┤
-│                 │                 │                 │                 │ • Issue #1      │
 │                 │                 │                 │                 │ • Issue #2      │
 │                 │                 │                 │                 │ • Issue #3      │
 │                 │                 │                 │                 │ • Issue #4      │
@@ -23,6 +22,7 @@
 │                 │                 │                 │                 │ • Issue #8      │
 │                 │                 │                 │                 │ • Issue #9      │
 │                 │                 │                 │                 │ • Issue #10     │
+│                 │                 │                 │                 │ • Issue #11     │
 └─────────────────┴─────────────────┴─────────────────┴─────────────────┴─────────────────┘
 ```
 
@@ -32,7 +32,7 @@
 
 ### 1. 📋 Backlog (Future Work)
 - **Policy:** Contains scoped issues not yet scheduled for immediate development.
-- **Current Cards:** All primary roadmap epics (#1 through #10) have been completed!
+- **Current Cards:** All primary roadmap epics have been completed!
 
 ### 2. 🎯 Ready / To Do (WIP Limit: 3)
 - **Policy:** Clear acceptance criteria defined, dependencies resolved, ready for immediate assignment.
@@ -51,32 +51,39 @@
   - [x] Docker containerization & Docker Hub workflow configured
 
 ### 5. ✅ Done
-- **Policy:** PR reviewed, approved, merged into `develop` (or `main`), acceptance criteria verified.
-- **Current Cards:**
-  - [x] Initial GitHub project configuration & governance setup (`.github/`, templates, CI, Kanban definitions)
-  - [x] `[#1]` [Epic] Backend Foundation & Student CRUD API *(Phase 1)*
-  - [x] `[#2]` [Epic] React + Vite Frontend Scaffolding & Design System *(Phase 1)*
-  - [x] `[#3]` [Feature] Student Management & Portfolio View *(Phase 1)*
-  - [x] `[#4]` [Epic] Attendance Data Model & Bulk REST Endpoints *(Phase 2)*
-  - [x] `[#5]` [Feature] Daily Attendance Roster UI *(Phase 2)*
-  - [x] `[#6]` [Feature] Attendance Analytics & CSV Reports *(Phase 2)*
-  - [x] `[#7]` [Epic] Local Face Detection Service (OpenCV) *(Phase 3)*
-  - [x] `[#8]` [Feature] Teacher Photo-Verification Review Screen *(Phase 3)*
-  - [x] `[#9]` [Testing] Backend Pytest Suite (18/18 passing) & Validation Hardening *(Phase 4)*
-  - [x] `[#10]` [Documentation & Infra] Complete Setup Guide, Docker Compose & Docker Hub CI/CD *(Phase 4)*
+- **Policy:** PR reviewed, approved, merged into `develop` and `main`, acceptance criteria verified.
+- **Current Cards on GitHub:**
+  - [x] `[#2]` [Epic] Backend Foundation & Student CRUD API *(Phase 1 / Milestone 1)*
+  - [x] `[#3]` [Epic] React + Vite Frontend Scaffolding & Light UI Design System *(Phase 1 / Milestone 1)*
+  - [x] `[#4]` [Feature] Student Management & Portfolio View *(Phase 1 / Milestone 1)*
+  - [x] `[#5]` [Epic] Attendance Data Model & Bulk REST Endpoints *(Phase 2 / Milestone 2)*
+  - [x] `[#6]` [Feature] Daily Attendance Roster UI *(Phase 2 / Milestone 2)*
+  - [x] `[#7]` [Feature] Attendance Analytics & Reports *(Phase 2 / Milestone 2)*
+  - [x] `[#8]` [Epic] Local Face Detection Service (OpenCV) *(Phase 3 / Milestone 3)*
+  - [x] `[#9]` [Feature] Teacher Photo-Verification Review Screen *(Phase 3 / Milestone 3)*
+  - [x] `[#10]` [Testing] Backend Pytest Suite & Validation Hardening *(Phase 4 / Milestone 4)*
+  - [x] `[#11]` [Documentation & Infra] Complete Setup Guide, Docker Compose & Docker Hub CI/CD *(Phase 4 / Milestone 4)*
 
 ---
 
-## How to Set Up the Kanban Board on GitHub
+## Customizing the GitHub Kanban Board
 
-1. Navigate to your repository: `https://github.com/Bilal-ai-stack/classroom-management`
-2. Click the **Projects** tab at the top.
-3. Click **New project** -> Select **Board** template (Kanban).
-4. Name the project: `Classroom Management Kanban`.
-5. Set the columns to:
-   - `📋 Backlog`
-   - `🎯 Ready`
-   - `🚧 In Progress`
-   - `👀 In Review`
-   - `✅ Done`
-6. Click **+ Add item** and link issues `#1` through `#10`.
+### Step 1: Open Your Board
+1. Go to your repository: [Bilal-ai-stack/classroom-management](https://github.com/Bilal-ai-stack/classroom-management)
+2. Click the **Projects** tab at the top (or open your existing Project board).
+
+### Step 2: Configure Kanban Columns (Status Field)
+1. In your project board, click the dropdown next to the view name (e.g. **Board**) or click the column header options.
+2. Under the **Status** field settings (click the small down arrow next to Status column headers or click **Settings**):
+   - Rename / arrange columns as:
+     - `📋 Backlog`
+     - `🎯 Ready`
+     - `🚧 In Progress`
+     - `👀 In Review`
+     - `✅ Done`
+
+### Step 3: Populate the Board with the Developed Issues
+1. Click **+ Add item** at the bottom of the `✅ Done` column (or press `Ctrl+Space` / click **+ Add item**).
+2. Type `#` and select repository `Bilal-ai-stack/classroom-management`.
+3. Select all closed issues (`#2` through `#11`) or click each one to add them to `✅ Done`.
+4. All 10 issues will appear as cards with their respective Milestones and color-coded Phase labels!
