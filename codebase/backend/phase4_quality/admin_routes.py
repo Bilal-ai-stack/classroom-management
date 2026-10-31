@@ -1,11 +1,140 @@
-from flask import Blueprint, jsonify, request
+import os
+import re
+from io import BytesIO
+from pathlib import Path
+import xml.etree.ElementTree as ET
+from flask import Blueprint, jsonify, request, send_file, Response, current_app
 from db import db
 from phase1_students.models import Student
-from phase4_quality.auth import require_auth, require_roles
+from phase4_quality.auth import require_auth, require_roles, utcnow
 from phase4_quality.institution_models import AcademicClass, AcademicTerm, InstitutionSettings
 from phase4_quality.models import AuditEvent, User, record_audit
 
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+
 admin_bp = Blueprint('admin', __name__)
+
+MAX_LOGO_BYTES = 2 * 1024 * 1024  # 2MB
+MAX_RASTER_DIMENSION = 2048
+MIN_RASTER_DIMENSION = 16
+
+MIME_MAP = {
+    'svg': 'image/svg+xml',
+    'png': 'image/png',
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+}
+
+DEFAULT_SCHOOL_CREST_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e3a8a" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+  <path d="M60 8 C88 8 106 18 106 42 C106 78 78 104 60 114 C42 104 14 78 14 42 C14 18 32 8 60 8 Z" fill="url(#shieldGrad)" filter="url(#shadow)" stroke="#3b82f6" stroke-width="2"/>
+  <path d="M60 14 C83 14 99 22 99 44 C99 74 74 97 60 106 C46 97 21 74 21 44 C21 22 37 14 60 14 Z" fill="none" stroke="url(#goldGrad)" stroke-width="1.5" stroke-dasharray="2 1" opacity="0.6"/>
+  <path d="M60 72 C50 67 36 67 28 72 L28 50 C36 45 50 45 60 50 Z" fill="#ffffff" opacity="0.95"/>
+  <path d="M60 72 C70 67 84 67 92 72 L92 50 C84 45 70 45 60 50 Z" fill="#f1f5f9" opacity="0.95"/>
+  <line x1="60" y1="50" x2="60" y2="72" stroke="#cbd5e1" stroke-width="1.5"/>
+  <polygon points="60,24 86,34 60,44 34,34" fill="url(#goldGrad)"/>
+  <polygon points="60,39 78,33 78,37 60,43 42,37 42,33" fill="#b45309"/>
+  <path d="M78 34 L82 45" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="82" cy="46" r="1.5" fill="#f59e0b"/>
+  <polygon points="60,82 62,87 67,87 63,90 65,95 60,92 55,95 57,90 53,87 58,87" fill="url(#goldGrad)"/>
+  <polygon points="44,82 45.5,85.5 49.5,85.5 46.5,88 48,91.5 44,89.5 40,91.5 41.5,88 38.5,85.5 42.5,85.5" fill="url(#goldGrad)" opacity="0.8"/>
+  <polygon points="76,82 77.5,85.5 81.5,85.5 78.5,88 80,91.5 76,89.5 72,91.5 73.5,88 70.5,85.5 74.5,85.5" fill="url(#goldGrad)" opacity="0.8"/>
+</svg>"""
+
+
+def get_branding_dir():
+    branding_dir = current_app.config.get('BRANDING_DIRECTORY')
+    if not branding_dir:
+        branding_dir = Path(current_app.instance_path) / 'branding'
+    path = Path(branding_dir)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def validate_and_sanitize_svg(content: bytes) -> tuple[bool, str]:
+    """Sanitize and validate an SVG upload to prevent XSS and XXE attacks."""
+    try:
+        svg_text = content.decode('utf-8')
+    except UnicodeDecodeError:
+        return False, 'SVG file must be valid UTF-8 text.'
+
+    lower_text = svg_text.lower()
+
+    # Block script execution and HTML embedding
+    forbidden_tokens = [
+        '<script', '</script', 'javascript:', 'vbscript:', 'data:text/html',
+        '<!entity', '<!doctype', 'system ', 'public ',
+        '<foreignobject', '</foreignobject', '<iframe', '<embed', '<object',
+    ]
+    for token in forbidden_tokens:
+        if token in lower_text:
+            return False, f'SVG contains unsafe directive: {token}'
+
+    # Block inline event handlers (onload, onerror, onclick, etc.)
+    if re.search(r'\bon[a-z]+\s*=', lower_text):
+        return False, 'SVG contains prohibited inline event handlers.'
+
+    # Block external network resources (prevent SSRF/data exfiltration)
+    if re.search(r'(href|xlink:href)\s*=\s*["\'](https?:|//)', lower_text):
+        return False, 'SVG contains prohibited external hyperlinks or resources.'
+
+    # Validate well-formed XML structure without external entities
+    try:
+        parser = ET.XMLParser()
+        root = ET.fromstring(svg_text, parser=parser)
+        if not root.tag.endswith('svg'):
+            return False, 'Root element of SVG must be <svg>.'
+    except Exception as err:
+        return False, f'Malformed SVG XML structure: {err}'
+
+    return True, ''
+
+
+def validate_raster_image(content: bytes, ext: str) -> tuple[bool, str]:
+    """Validate raster images (PNG, JPG, JPEG) with Pillow."""
+    if not PIL_AVAILABLE:
+        return False, 'Server cannot process raster images because Pillow is not available.'
+
+    try:
+        Image.MAX_IMAGE_PIXELS = 5_000_000
+        with Image.open(BytesIO(content)) as img:
+            img.verify()
+
+        with Image.open(BytesIO(content)) as img:
+            fmt = (img.format or '').upper()
+            if ext in ('jpg', 'jpeg') and fmt != 'JPEG':
+                return False, f'File content does not match JPEG format (detected {fmt}).'
+            if ext == 'png' and fmt != 'PNG':
+                return False, f'File content does not match PNG format (detected {fmt}).'
+
+            w, h = img.size
+            if w > MAX_RASTER_DIMENSION or h > MAX_RASTER_DIMENSION:
+                return False, f'Logo dimensions ({w}x{h}) exceed maximum allowed size of {MAX_RASTER_DIMENSION}x{MAX_RASTER_DIMENSION} pixels.'
+            if w < MIN_RASTER_DIMENSION or h < MIN_RASTER_DIMENSION:
+                return False, f'Logo dimensions ({w}x{h}) are too small (minimum {MIN_RASTER_DIMENSION}x{MIN_RASTER_DIMENSION} pixels).'
+
+        return True, ''
+    except Image.DecompressionBombError:
+        return False, 'Image rejected: decompression bomb detected.'
+    except Exception as err:
+        return False, f'Invalid or corrupt image file: {err}'
+
 
 
 def get_or_create_settings():
@@ -93,6 +222,155 @@ def update_institution_settings():
     return jsonify({
         'success': True,
         'message': 'Institution settings updated successfully.',
+        'settings': settings.to_dict()
+    }), 200
+
+
+@admin_bp.route('/institution/profile', methods=['GET'])
+def get_public_institution_profile():
+    """Get public institution profile (name, code, logo)."""
+    settings = get_or_create_settings()
+    d = settings.to_dict()
+    return jsonify({
+        'success': True,
+        'institution': {
+            'institution_name': settings.institution_name,
+            'institution_code': settings.institution_code,
+            'academic_year': settings.academic_year,
+            'current_term': settings.current_term,
+            'has_custom_logo': d.get('has_custom_logo', False),
+            'logo_url': d.get('logo_url', '/api/institution/logo'),
+            'logo_updated_at': d.get('logo_updated_at'),
+        }
+    }), 200
+
+
+@admin_bp.route('/institution/logo', methods=['GET'])
+def get_institution_logo():
+    """Serve the active institution logo or default academic crest."""
+    settings = get_or_create_settings()
+    if settings.logo_path:
+        branding_dir = get_branding_dir()
+        target_file = branding_dir / settings.logo_path
+        if target_file.is_file():
+            ext = settings.logo_path.rsplit('.', 1)[-1].lower()
+            mimetype = MIME_MAP.get(ext, 'application/octet-stream')
+            response = send_file(target_file, mimetype=mimetype, max_age=3600)
+            response.headers['Cache-Control'] = 'public, max-age=3600'
+            return response
+
+    response = Response(DEFAULT_SCHOOL_CREST_SVG, mimetype='image/svg+xml')
+    response.headers['Cache-Control'] = 'public, max-age=86400'
+    return response
+
+
+@admin_bp.route('/admin/institution/logo', methods=['POST'])
+@require_roles('admin')
+def upload_institution_logo():
+    """Upload, validate, and store a custom institution logo (PNG, JPG, SVG)."""
+    settings = get_or_create_settings()
+
+    if 'logo' not in request.files and 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No logo file provided in request.'}), 400
+
+    file = request.files.get('logo') or request.files.get('file')
+    if not file or not file.filename:
+        return jsonify({'success': False, 'error': 'No file selected for upload.'}), 400
+
+    filename = file.filename.strip()
+    if '.' not in filename:
+        return jsonify({'success': False, 'error': 'Uploaded file must have an extension.'}), 400
+
+    ext = filename.rsplit('.', 1)[-1].lower()
+    if ext not in MIME_MAP:
+        return jsonify({
+            'success': False,
+            'error': f"Unsupported image extension '{ext}'. Allowed formats: PNG, JPG, JPEG, SVG."
+        }), 400
+
+    content = file.read()
+    if len(content) == 0:
+        return jsonify({'success': False, 'error': 'The uploaded logo file is empty.'}), 400
+
+    if len(content) > MAX_LOGO_BYTES:
+        return jsonify({
+            'success': False,
+            'error': f'Logo file size ({len(content)} bytes) exceeds the 2MB limit.'
+        }), 400
+
+    # Format-specific validation & sanitization
+    if ext == 'svg':
+        valid, err = validate_and_sanitize_svg(content)
+        if not valid:
+            return jsonify({'success': False, 'error': f'SVG validation failed: {err}'}), 400
+    else:
+        valid, err = validate_raster_image(content, ext)
+        if not valid:
+            return jsonify({'success': False, 'error': f'Image validation failed: {err}'}), 400
+
+    branding_dir = get_branding_dir()
+
+    # Clean up previous custom logo if it had a different extension
+    if settings.logo_path:
+        old_file = branding_dir / settings.logo_path
+        if old_file.exists():
+            try:
+                old_file.unlink()
+            except OSError:
+                pass
+
+    saved_filename = f"school_logo.{ext}"
+    target_path = branding_dir / saved_filename
+    target_path.write_bytes(content)
+
+    settings.logo_path = saved_filename
+    settings.logo_updated_at = utcnow()
+
+    record_audit(
+        'institution.logo_upload',
+        'institution_settings',
+        settings.id,
+        {'filename': saved_filename, 'size': len(content), 'type': ext},
+        actor_user_id=request.current_user.id
+    )
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': 'Institution logo uploaded and activated successfully.',
+        'settings': settings.to_dict()
+    }), 200
+
+
+@admin_bp.route('/admin/institution/logo', methods=['DELETE'])
+@require_roles('admin')
+def delete_institution_logo():
+    """Remove custom institution logo and revert to the default crest."""
+    settings = get_or_create_settings()
+
+    if settings.logo_path:
+        branding_dir = get_branding_dir()
+        old_file = branding_dir / settings.logo_path
+        if old_file.exists():
+            try:
+                old_file.unlink()
+            except OSError:
+                pass
+
+        settings.logo_path = None
+        settings.logo_updated_at = None
+        record_audit(
+            'institution.logo_remove',
+            'institution_settings',
+            settings.id,
+            {},
+            actor_user_id=request.current_user.id
+        )
+        db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': 'Custom school logo removed. Default crest restored.',
         'settings': settings.to_dict()
     }), 200
 

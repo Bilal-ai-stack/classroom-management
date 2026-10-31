@@ -5,7 +5,6 @@ import {
   CalendarCheck,
   Camera,
   BarChart3,
-  School,
   Sun,
   Moon,
   ShieldCheck,
@@ -17,10 +16,13 @@ import {
   Settings
 } from 'lucide-react';
 
+import SchoolLogo from './SchoolLogo';
+
 export default function Navbar({
   activeTab,
   setActiveTab,
   teacherProfile,
+  institution,
   onOpenAuthModal,
   onOpenPrivacyModal,
   onLogout
@@ -69,13 +71,22 @@ export default function Navbar({
           aria-label="Go to Dashboard"
           onClick={() => handleTabChange('dashboard')}
           onKeyDown={(e) => e.key === 'Enter' && handleTabChange('dashboard')}
+          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.65rem' }}
         >
-          <div className="brand-icon-box" aria-hidden="true">
-            <School size={22} />
-          </div>
+          <SchoolLogo
+            logoUrl={institution?.logo_url}
+            institutionName={institution?.institution_name || 'ClassroomOS'}
+            size={34}
+            rounded="md"
+            showBorder={false}
+          />
           <div className="brand-text">
-            <span>ClassroomOS</span>
-            <span className="brand-badge">Pro</span>
+            <span style={{ fontWeight: 700, letterSpacing: '-0.02em' }}>
+              {institution?.institution_name || 'ClassroomOS'}
+            </span>
+            <span className="brand-badge" style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem' }}>
+              {institution?.institution_code || 'Pro'}
+            </span>
           </div>
         </div>
 

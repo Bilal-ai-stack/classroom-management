@@ -14,6 +14,7 @@ __pycache__/
 tmp_cache/
 tmp_pytest/
 backend/instance/
+codebase/backend/instance/
 backend/uploads/temp/
 
 # Node / Frontend

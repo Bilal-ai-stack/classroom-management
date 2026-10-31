@@ -131,6 +131,7 @@ export const privacyApi = {
 
 // Phase 1 Administration & Institution Configuration API
 export const adminApi = {
+  getPublicProfile: () => apiRequest('/institution/profile'),
   getInstitution: () => apiRequest('/admin/institution'),
   updateInstitution: (data) => apiRequest('/admin/institution', {
     method: 'PUT',
@@ -166,7 +167,18 @@ export const adminApi = {
     method: 'POST',
     body: JSON.stringify(data)
   }),
-  getAuditEvents: () => apiRequest('/admin/audit-events')
+  getAuditEvents: () => apiRequest('/admin/audit-events'),
+  uploadLogo: (file) => {
+    const formData = new FormData();
+    formData.append('logo', file);
+    return apiRequest('/admin/institution/logo', {
+      method: 'POST',
+      body: formData
+    });
+  },
+  removeLogo: () => apiRequest('/admin/institution/logo', {
+    method: 'DELETE'
+  })
 };
 
 

@@ -2,8 +2,9 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Navbar from './shared/Navbar';
 import Modal from './shared/Modal';
 import StatusBadge from './shared/StatusBadge';
+import SchoolLogo from './shared/SchoolLogo';
 import AdminSettings from './pages/AdminSettings';
-import { studentApi, attendanceApi, photoApi, authApi, privacyApi } from './shared/api';
+import { studentApi, attendanceApi, photoApi, authApi, privacyApi, adminApi } from './shared/api';
 import {
   Users,
   Search,
@@ -47,6 +48,14 @@ export default function App() {
     today_late: 0,
     attendance_rate: 94,
     recent_students: []
+  });
+  const [institution, setInstitution] = useState({
+    institution_name: 'Springfield Academy',
+    institution_code: 'SCH-001',
+    academic_year: '2026-2027',
+    current_term: 'Fall 2026',
+    logo_url: '/api/institution/logo',
+    has_custom_logo: false
   });
   const [students, setStudents] = useState([]);
   const [classes, setClasses] = useState([]);
@@ -238,11 +247,23 @@ export default function App() {
     }
   }, []);
 
+  const loadInstitutionProfile = useCallback(async () => {
+    try {
+      const res = await adminApi.getPublicProfile();
+      if (res && res.institution) {
+        setInstitution((prev) => ({ ...prev, ...res.institution }));
+      }
+    } catch {
+      // offline fallback
+    }
+  }, []);
+
   useEffect(() => {
+    loadInstitutionProfile();
     loadDashboardStats();
     loadClasses();
     loadTeacherProfile();
-  }, [loadDashboardStats, loadClasses, loadTeacherProfile]);
+  }, [loadInstitutionProfile, loadDashboardStats, loadClasses, loadTeacherProfile]);
 
   useEffect(() => {
     loadStudents();
@@ -590,6 +611,7 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         teacherProfile={teacherProfile}
+        institution={institution}
         onOpenAuthModal={() => { setIsAuthModalOpen(true); setAuthError(''); }}
         onOpenPrivacyModal={() => { setIsPrivacyModalOpen(true); loadPrivacyDetails(); }}
         onLogout={handleLogout}
@@ -606,6 +628,58 @@ export default function App() {
         {/* DASHBOARD TAB */}
         {activeTab === 'dashboard' && (
           <div>
+            {/* Institutional Profile Banner */}
+            <div className="institution-welcome-banner glass-card" style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '1.25rem',
+              padding: '1.25rem 1.5rem',
+              borderRadius: 'var(--radius-lg)',
+              marginBottom: '1.75rem',
+              background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(14, 165, 233, 0.04) 100%)',
+              border: '1px solid var(--border)',
+              flexWrap: 'wrap'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                <SchoolLogo
+                  logoUrl={institution.logo_url}
+                  institutionName={institution.institution_name}
+                  size={52}
+                  showBorder={true}
+                  rounded="lg"
+                />
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                    <h2 style={{ fontSize: '1.3rem', fontWeight: 800, margin: 0, color: 'var(--text-main)', letterSpacing: '-0.01em' }}>
+                      {institution.institution_name}
+                    </h2>
+                    <span className="badge badge-primary" style={{ fontSize: '0.72rem', padding: '0.2rem 0.55rem' }}>
+                      {institution.institution_code}
+                    </span>
+                  </div>
+                  <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                    Academic Year {institution.academic_year} • {institution.current_term}
+                  </p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                {teacherProfile?.role === 'admin' ? (
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setActiveTab('admin')}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}
+                  >
+                    Institution Settings
+                  </button>
+                ) : (
+                  <span className="badge badge-neutral" style={{ fontSize: '0.8rem' }}>
+                    Active Academic Term
+                  </span>
+                )}
+              </div>
+            </div>
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.75rem', flexWrap: 'wrap', gap: '1rem' }}>
               <div>
                 <h1 style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
@@ -1165,6 +1239,40 @@ export default function App() {
               </button>
             </div>
 
+            {/* Institution Ledger Report Header */}
+            <div className="report-institution-header card" style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '1rem',
+              padding: '1rem 1.4rem',
+              marginBottom: '1.25rem',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border)',
+              background: 'var(--surface-color)',
+              flexWrap: 'wrap'
+            }}>
+              <SchoolLogo
+                logoUrl={institution.logo_url}
+                institutionName={institution.institution_name}
+                size={48}
+                showBorder={true}
+                rounded="md"
+              />
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                  <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                    {institution.institution_name}
+                  </h3>
+                  <span className="badge badge-primary" style={{ fontSize: '0.72rem', padding: '0.15rem 0.45rem' }}>
+                    {institution.institution_code}
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                  Official Attendance Ledger • Academic Year {institution.academic_year} • {institution.current_term}
+                </div>
+              </div>
+            </div>
+
             {/* Filter Bar */}
             <div className="card" style={{ padding: '1.15rem 1.4rem', marginBottom: '1.5rem' }}>
               <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -1345,7 +1453,8 @@ export default function App() {
                   type="file"
                   ref={photoInputRef}
                   style={{ display: 'none' }}
-                  accept="image/png, image/jpeg, image/webp"
+                  accept="image/*"
+                  capture="environment"
                   onChange={handlePhotoSelect}
                 />
 
@@ -1356,12 +1465,12 @@ export default function App() {
                       alt="Classroom preview"
                       style={{ maxWidth: '100%', maxHeight: '240px', borderRadius: '12px', objectFit: 'cover', marginBottom: '1.25rem', boxShadow: 'var(--shadow-md)' }}
                     />
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                       <button
                         className="btn btn-secondary btn-sm"
                         onClick={() => photoInputRef.current && photoInputRef.current.click()}
                       >
-                        Change Photo
+                        Change Photo / Retake
                       </button>
                       <button
                         className="btn btn-primary btn-sm"
@@ -1377,15 +1486,15 @@ export default function App() {
                     <div style={{ display: 'inline-flex', padding: '1.25rem', background: 'var(--primary-light)', borderRadius: '50%', color: 'var(--primary)', marginBottom: '1rem' }}>
                       <UploadCloud size={40} />
                     </div>
-                    <h2 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '0.5rem' }}>Upload Classroom Photo</h2>
+                    <h2 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '0.5rem' }}>Classroom Photo Attendance</h2>
                     <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', maxWidth: '380px', margin: '0 auto 1.5rem' }}>
-                      Upload a group photo taken in class. Faces are detected locally and matched against your enrolled student roster.
+                      Capture with device camera or upload a group photo. Faces are detected locally and matched against your student roster.
                     </p>
                     <button
                       className="btn btn-primary"
                       onClick={() => photoInputRef.current && photoInputRef.current.click()}
                     >
-                      <Camera size={16} /> Select Photo File
+                      <Camera size={16} /> Take Photo / Select Image
                     </button>
                   </div>
                 )}
@@ -1485,7 +1594,11 @@ export default function App() {
 
         {/* ADMIN SETTINGS TAB */}
         {activeTab === 'admin' && (
-          <AdminSettings teacherProfile={teacherProfile} onShowToast={showToast} />
+          <AdminSettings
+            teacherProfile={teacherProfile}
+            onShowToast={showToast}
+            onInstitutionUpdated={(updated) => setInstitution((prev) => ({ ...prev, ...updated }))}
+          />
         )}
       </main>
 
@@ -1497,26 +1610,39 @@ export default function App() {
       >
         {viewingStudent && (
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border)' }}>
-              <div style={{
-                width: '54px',
-                height: '54px',
-                borderRadius: '14px',
-                background: 'linear-gradient(135deg, #2563EB, #1D4ED8)',
-                color: '#FFFFFF',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '1.3rem',
-                fontWeight: 800
-              }}>
-                {viewingStudent.full_name.charAt(0)}
-              </div>
-              <div>
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)' }}>{viewingStudent.full_name}</h3>
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>
-                  Roll: <strong style={{ color: 'var(--primary)' }}>{viewingStudent.roll_number}</strong> • {viewingStudent.class_name} (Section {viewingStudent.section})
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{
+                  width: '54px',
+                  height: '54px',
+                  borderRadius: '14px',
+                  background: 'linear-gradient(135deg, #2563EB, #1D4ED8)',
+                  color: '#FFFFFF',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '1.3rem',
+                  fontWeight: 800
+                }}>
+                  {viewingStudent.full_name.charAt(0)}
                 </div>
+                <div>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)', margin: 0 }}>{viewingStudent.full_name}</h3>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginTop: '0.15rem' }}>
+                    Roll: <strong style={{ color: 'var(--primary)' }}>{viewingStudent.roll_number}</strong> • {viewingStudent.class_name} (Section {viewingStudent.section})
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--border-light)', padding: '0.35rem 0.65rem', borderRadius: 'var(--radius-md)' }}>
+                <SchoolLogo
+                  logoUrl={institution.logo_url}
+                  institutionName={institution.institution_name}
+                  size={26}
+                  rounded="sm"
+                />
+                <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                  {institution.institution_name}
+                </span>
               </div>
             </div>
 
@@ -1856,6 +1982,22 @@ export default function App() {
         title="Educator Sign-In"
       >
         <form onSubmit={handleLogin}>
+          <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+            <SchoolLogo
+              logoUrl={institution.logo_url}
+              institutionName={institution.institution_name}
+              size={56}
+              showBorder={true}
+              rounded="lg"
+            />
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 800, marginTop: '0.6rem', marginBottom: '0.2rem', color: 'var(--text-main)' }}>
+              {institution.institution_name}
+            </h3>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0 }}>
+              Academic Year {institution.academic_year} • Classroom OS Portal
+            </p>
+          </div>
+
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem', padding: '0.75rem', background: 'var(--primary-light)', borderRadius: '10px' }}>
             <Lock size={24} color="var(--primary)" />
             <div style={{ fontSize: '0.88rem', color: 'var(--text-main)' }}>

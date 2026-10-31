@@ -19,6 +19,8 @@ class InstitutionSettings(db.Model):
     address = db.Column(db.Text, nullable=True, default='')
     timezone = db.Column(db.String(50), nullable=False, default='UTC')
     min_attendance_warning_rate = db.Column(db.Float, nullable=False, default=75.0)
+    logo_path = db.Column(db.String(255), nullable=True)
+    logo_updated_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
@@ -37,6 +39,9 @@ class InstitutionSettings(db.Model):
             'address': self.address or '',
             'timezone': self.timezone,
             'min_attendance_warning_rate': round(float(self.min_attendance_warning_rate), 1),
+            'has_custom_logo': bool(self.logo_path),
+            'logo_url': f"/api/institution/logo?v={int(self.logo_updated_at.timestamp())}" if self.logo_path and self.logo_updated_at else '/api/institution/logo',
+            'logo_updated_at': self.logo_updated_at.isoformat() if self.logo_updated_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
 

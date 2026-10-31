@@ -115,6 +115,11 @@
   box-sizing: border-box;
 }
 
+html, body {
+  overflow-x: hidden;
+  width: 100%;
+}
+
 body {
   font-family: var(--font-family);
   background-color: var(--bg-main);
@@ -933,15 +938,65 @@ a {
     width: auto;
   }
 
-  /* Buttons */
+  /* Buttons & Touch Targets — Minimum 44px */
   .btn {
+    min-height: 44px;
     padding: 0.6rem 1rem;
     font-size: 0.88rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .navbar .btn-sm,
+  .hamburger-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .form-input, .form-select, .form-textarea {
+    font-size: 16px; /* Prevents auto-zoom on iOS */
+    min-height: 44px;
+  }
+
+  /* Single-hand Thumb-friendly Attendance Toggles */
+  .status-btn-group {
+    display: flex;
+    width: 100%;
+    min-width: 220px;
+    gap: 0.35rem;
+  }
+
+  .status-toggle-btn {
+    flex: 1;
+    min-height: 44px;
+    padding: 0.5rem 0.6rem;
+    font-size: 0.82rem;
+    justify-content: center;
+  }
+
+  .institution-welcome-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1rem;
   }
 }
 
 /* Small Mobile — ≤ 480px */
 @media (max-width: 480px) {
+  .navbar-inner {
+    padding: 0.65rem 0.85rem;
+  }
+
+  .brand-text span:first-child {
+    font-size: 0.95rem;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .stats-grid {
     grid-template-columns: 1fr 1fr;
     gap: 0.65rem;
@@ -969,11 +1024,7 @@ a {
   }
 
   .brand-badge {
-    display: none; /* hide "Pro" badge on tiny screens to save space */
-  }
-
-  .brand-text span:first-child {
-    font-size: 0.95rem;
+    display: none; /* hide badge on tiny screens to save space */
   }
 
   .card {
@@ -984,8 +1035,50 @@ a {
     font-size: 1rem;
   }
 
+  .modal-overlay {
+    padding: 0.5rem;
+  }
+
   .modal-content {
     padding: 1.25rem 1rem;
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .table-container {
+    border-radius: var(--radius-md);
+  }
+}
+
+/* Ultra-compact Mobile — ≤ 375px (Down to 320px) */
+@media (max-width: 375px) {
+  .navbar-inner {
+    padding: 0.5rem 0.65rem;
+    gap: 0.4rem;
+  }
+
+  .brand-text span:first-child {
+    font-size: 0.88rem;
+    max-width: 120px;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
+  }
+
+  .main-content {
+    padding: 0.85rem 0.65rem;
+  }
+
+  .status-btn-group {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .status-toggle-btn {
+    width: 100%;
+    min-height: 44px;
   }
 }
 

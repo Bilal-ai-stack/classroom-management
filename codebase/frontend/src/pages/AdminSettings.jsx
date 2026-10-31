@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Modal from '../shared/Modal';
+import SchoolLogo from '../shared/SchoolLogo';
 import { adminApi } from '../shared/api';
 import {
   Building2,
@@ -14,10 +15,14 @@ import {
   UserCheck,
   UserX,
   KeyRound,
-  History
+  History,
+  Upload,
+  Image as ImageIcon,
+  AlertCircle,
+  RotateCcw
 } from 'lucide-react';
 
-export default function AdminSettings({ teacherProfile, onShowToast }) {
+export default function AdminSettings({ teacherProfile, onShowToast, onInstitutionUpdated }) {
   const [subTab, setSubTab] = useState('institution'); // 'institution' | 'classes' | 'users' | 'audit'
   const [loading, setLoading] = useState(false);
 
@@ -31,9 +36,15 @@ export default function AdminSettings({ teacherProfile, onShowToast }) {
     contact_phone: '',
     address: '',
     timezone: 'UTC',
-    min_attendance_warning_rate: 75.0
+    min_attendance_warning_rate: 75.0,
+    has_custom_logo: false,
+    logo_url: '/api/institution/logo'
   });
   const [savingInst, setSavingInst] = useState(false);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState(null);
+  const [logoError, setLogoError] = useState('');
+  const logoInputRef = useRef(null);
 
   // Classes & Sections State
   const [classesList, setClassesList] = useState([]);
@@ -75,13 +86,15 @@ export default function AdminSettings({ teacherProfile, onShowToast }) {
       const res = await adminApi.getInstitution();
       if (res.success && res.settings) {
         setInstitution(res.settings);
+        setLogoPreviewUrl(res.settings.logo_url);
+        onInstitutionUpdated?.(res.settings);
       }
     } catch (err) {
       onShowToast?.(err.message || 'Failed to load institution settings', 'error');
     } finally {
       setLoading(false);
     }
-  }, [onShowToast]);
+  }, [onShowToast, onInstitutionUpdated]);
 
   const fetchClasses = useCallback(async () => {
     try {
@@ -133,16 +146,64 @@ export default function AdminSettings({ teacherProfile, onShowToast }) {
   }, [subTab, fetchInstitution, fetchClasses, fetchUsers, fetchAuditEvents]);
 
   // -------------------------------------------------------------------------
-  // Institution Actions
+  // Institution & Logo Actions
   // -------------------------------------------------------------------------
+
+  const handleUploadLogoFile = async (file) => {
+    setLogoError('');
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      setLogoError('Logo file size exceeds the 2MB limit. Please choose a smaller image.');
+      return;
+    }
+    setIsUploadingLogo(true);
+    try {
+      const res = await adminApi.uploadLogo(file);
+      if (res.success && res.settings) {
+        setInstitution(res.settings);
+        setLogoPreviewUrl(res.settings.logo_url);
+        onInstitutionUpdated?.(res.settings);
+        onShowToast?.('School logo uploaded and activated successfully!', 'success');
+      }
+    } catch (err) {
+      setLogoError(err.message || 'Failed to upload school logo.');
+      onShowToast?.(err.message || 'Logo upload failed', 'error');
+    } finally {
+      setIsUploadingLogo(false);
+      if (logoInputRef.current) logoInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveLogo = async () => {
+    if (!window.confirm('Are you sure you want to remove the custom school logo and revert to the default academic crest?')) {
+      return;
+    }
+    setIsUploadingLogo(true);
+    setLogoError('');
+    try {
+      const res = await adminApi.removeLogo();
+      if (res.success && res.settings) {
+        setInstitution(res.settings);
+        setLogoPreviewUrl(res.settings.logo_url);
+        onInstitutionUpdated?.(res.settings);
+        onShowToast?.('Custom logo removed. Default academic crest restored.', 'success');
+      }
+    } catch (err) {
+      setLogoError(err.message || 'Failed to remove custom logo.');
+      onShowToast?.(err.message || 'Failed to remove logo', 'error');
+    } finally {
+      setIsUploadingLogo(false);
+    }
+  };
 
   const handleSaveInstitution = async (e) => {
     e.preventDefault();
     try {
       setSavingInst(true);
       const res = await adminApi.updateInstitution(institution);
-      if (res.success) {
+      if (res.success && res.settings) {
         setInstitution(res.settings);
+        onInstitutionUpdated?.(res.settings);
         onShowToast?.('Institution settings updated successfully!', 'success');
       }
     } catch (err) {
@@ -398,6 +459,88 @@ export default function AdminSettings({ teacherProfile, onShowToast }) {
           <h2 style={{ fontSize: '1.2rem', fontWeight: 600, marginBottom: '1.25rem', color: 'var(--text-main)' }}>
             Institution Profile & Attendance Rules
           </h2>
+
+          {/* Institution Branding & Logo Section */}
+          <div className="card" style={{ padding: '1.25rem 1.5rem', marginBottom: '1.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--surface-color, rgba(255,255,255,0.7))' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <ImageIcon size={19} color="var(--primary)" />
+                  School Logo & Institution Branding
+                </h3>
+                <p style={{ margin: '0.25rem 0 0', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                  Active crest is displayed in the navigation header, student portfolios, and official attendance reports.
+                </p>
+              </div>
+              <span className={`badge ${institution.has_custom_logo ? 'badge-present' : 'badge-primary'}`} style={{ fontSize: '0.78rem', padding: '0.25rem 0.65rem' }}>
+                {institution.has_custom_logo ? 'Custom Logo Active' : 'Default Academic Crest'}
+              </span>
+            </div>
+
+            {logoError && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1rem', background: '#FEE2E2', border: '1px solid #FCA5A5', borderRadius: '8px', color: '#991B1B', marginBottom: '1rem', fontSize: '0.85rem' }}>
+                <AlertCircle size={16} />
+                <span>{logoError}</span>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative' }}>
+                <SchoolLogo
+                  logoUrl={logoPreviewUrl || institution.logo_url}
+                  institutionName={institution.institution_name}
+                  size={84}
+                  showBorder={true}
+                  rounded="lg"
+                />
+              </div>
+
+              <div style={{ flex: 1, minWidth: '240px' }}>
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                  <input
+                    type="file"
+                    ref={logoInputRef}
+                    accept="image/png, image/jpeg, image/svg+xml"
+                    onChange={(e) => {
+                      const file = e.target.files && e.target.files[0];
+                      if (file) handleUploadLogoFile(file);
+                    }}
+                    style={{ display: 'none' }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={() => logoInputRef.current && logoInputRef.current.click()}
+                    disabled={isUploadingLogo}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+                  >
+                    <Upload size={15} />
+                    <span>{isUploadingLogo ? 'Uploading...' : institution.has_custom_logo ? 'Replace School Logo' : 'Upload School Logo'}</span>
+                  </button>
+
+                  {institution.has_custom_logo && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={handleRemoveLogo}
+                      disabled={isUploadingLogo}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: '#EF4444' }}
+                      title="Remove custom logo and restore default academic crest"
+                    >
+                      <RotateCcw size={15} />
+                      <span>Restore Default Crest</span>
+                    </button>
+                  )}
+                </div>
+
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>
+                  <div>• Supported file formats: <strong>PNG, JPG, JPEG</strong>, or securely sanitized <strong>SVG</strong>.</div>
+                  <div>• Maximum file size: <strong>2 MB</strong>. Maximum raster resolution: <strong>2048 x 2048 px</strong>.</div>
+                  <div>• Persisted securely in application data directory across software updates and backups.</div>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem', marginBottom: '1.5rem' }}>
             <div>

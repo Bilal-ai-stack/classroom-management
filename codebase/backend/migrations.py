@@ -157,6 +157,10 @@ MIGRATIONS = (
         (1, 'Fall 2026 Term', '2026-08-15', '2026-12-20', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
         (2, 'Spring 2027 Term', '2027-01-10', '2027-05-30', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
     )),
+    (5, 'institution_branding_and_logo', (
+        "ALTER TABLE institution_settings ADD COLUMN logo_path VARCHAR(255)",
+        "ALTER TABLE institution_settings ADD COLUMN logo_updated_at DATETIME",
+    )),
 )
 
 

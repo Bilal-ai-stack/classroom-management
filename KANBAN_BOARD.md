@@ -10,12 +10,12 @@ The evidence-backed roadmap is maintained in `docs/CODEX_AUDIT.md` and execution
 
 - [x] Audit repository, baseline tests/build, and document architecture decisions.
 - [x] Reject invalid attendance atomically; remove fabricated photo detections.
-- [x] P0: versioned migrations and tested backup/restore gate.
+- [x] P0: versioned migrations (v1-v5) and tested backup/restore gate.
 - [x] P0: persistent authentication, secure bootstrap, RBAC, and route scoping.
 - [x] P0: deterministic, hardened local photo pipeline tests.
-- [x] P1: configurable institution/admin model and UI.
-- [x] P2: reporting, portfolios, privacy/retention, accessibility and offline resilience.
-- [x] P3: verified Windows packaging, upgrade, restore, and uninstall flow.
+- [x] P1: configurable institution/admin model, branding logo upload/sanitization, and UI.
+- [x] P2: reporting, portfolios, privacy/retention, mobile responsiveness (320px-1920px), accessibility and offline resilience.
+- [x] P3: verified Windows packaging (portable zip, Inno Setup), upgrade, restore, and uninstall flow.
 
 ---
 
@@ -26,16 +26,10 @@ The evidence-backed roadmap is maintained in `docs/CODEX_AUDIT.md` and execution
 │   📋 Backlog    │ 🎯 Ready (To Do)│ 🚧 In Progress  │ 👀 In Review/PR │     ✅ Done     │
 │                 │   (WIP Max: 3)  │   (WIP Max: 2)  │   (WIP Max: 2)  │                 │
 ├─────────────────┼─────────────────┼─────────────────┼─────────────────┼─────────────────┤
-│                 │                 │                 │                 │ • Issue #2      │
-│                 │                 │                 │                 │ • Issue #3      │
-│                 │                 │                 │                 │ • Issue #4      │
-│                 │                 │                 │                 │ • Issue #5      │
-│                 │                 │                 │                 │ • Issue #6      │
-│                 │                 │                 │                 │ • Issue #7      │
-│                 │                 │                 │                 │ • Issue #8      │
-│                 │                 │                 │                 │ • Issue #9      │
-│                 │                 │                 │                 │ • Issue #10     │
-│                 │                 │                 │                 │ • Issue #11     │
+│                 │                 │                 │                 │ • Issues #2-#11 │
+│                 │                 │                 │                 │ • Issue #12     │
+│                 │                 │                 │                 │ • Issue #13     │
+│                 │                 │                 │                 │ • Issue #14     │
 └─────────────────┴─────────────────┴─────────────────┴─────────────────┴─────────────────┘
 ```
 
@@ -76,6 +70,9 @@ The evidence-backed roadmap is maintained in `docs/CODEX_AUDIT.md` and execution
   - [x] `[#9]` [Feature] Teacher Photo-Verification Review Screen *(Phase 3 / Milestone 3)*
   - [x] `[#10]` [Testing] Backend Pytest Suite & Validation Hardening *(Phase 4 / Milestone 4)*
   - [x] `[#11]` [Documentation & Infra] Complete Setup Guide, Docker Compose & Docker Hub CI/CD *(Phase 4 / Milestone 4)*
+  - [x] `[#12]` [Feature] Editable School Logo & Institutional Branding *(Phase 4 / Release Execution)*
+  - [x] `[#13]` [Feature] Universal Mobile Responsiveness (320px–1920px) & Touch Attendance UI *(Phase 4 / Release Execution)*
+  - [x] `[#14]` [DevOps & Packaging] Windows Desktop Portable Build & Inno Setup Release *(Phase 4 / Release Execution)*
 
 ---
 

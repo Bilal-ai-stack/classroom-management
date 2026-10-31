@@ -265,3 +265,175 @@ def test_list_classes_dropdown_includes_configured_classes(client):
     res_teacher = client.get('/api/classes', headers={'Authorization': f'Bearer {teacher_token}'})
     assert res_teacher.status_code == 200
     assert res_teacher.json['classes'] == ['Grade 4']
+
+
+# ---------------------------------------------------------------------------
+# Institution Logo & Branding Tests
+# ---------------------------------------------------------------------------
+
+def test_get_default_school_logo_returns_svg_crest(client):
+    res = client.get('/api/institution/logo')
+    assert res.status_code == 200
+    assert 'image/svg+xml' in res.content_type
+    assert b'<svg' in res.data
+    assert b'shieldGrad' in res.data
+
+
+def test_admin_can_upload_valid_svg_logo(client):
+    import io
+    admin_token, _ = setup_users(client)
+
+    svg_content = b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="#1e3a8a"/></svg>'
+    data = {
+        'logo': (io.BytesIO(svg_content), 'crest.svg', 'image/svg+xml')
+    }
+    res = client.post(
+        '/api/admin/institution/logo',
+        headers={'Authorization': f'Bearer {admin_token}'},
+        data=data,
+        content_type='multipart/form-data'
+    )
+    assert res.status_code == 200
+    settings = res.json['settings']
+    assert settings['has_custom_logo'] is True
+    assert '/api/institution/logo?v=' in settings['logo_url']
+
+    # Public endpoint now serves uploaded SVG
+    fetch_res = client.get('/api/institution/logo')
+    assert fetch_res.status_code == 200
+    assert 'image/svg+xml' in fetch_res.content_type
+    assert b'circle cx="50"' in fetch_res.data
+
+
+def test_admin_can_upload_valid_png_logo(client):
+    import io
+    from PIL import Image
+    admin_token, _ = setup_users(client)
+
+    img_io = io.BytesIO()
+    img = Image.new('RGB', (120, 120), color=(30, 58, 138))
+    img.save(img_io, format='PNG')
+    img_io.seek(0)
+
+    data = {
+        'logo': (img_io, 'badge.png', 'image/png')
+    }
+    res = client.post(
+        '/api/admin/institution/logo',
+        headers={'Authorization': f'Bearer {admin_token}'},
+        data=data,
+        content_type='multipart/form-data'
+    )
+    assert res.status_code == 200
+    settings = res.json['settings']
+    assert settings['has_custom_logo'] is True
+
+    # Public endpoint returns the uploaded PNG
+    fetch_res = client.get('/api/institution/logo')
+    assert fetch_res.status_code == 200
+    assert 'image/png' in fetch_res.content_type
+
+
+def test_malicious_svg_rejected_by_sanitizer(client):
+    import io
+    admin_token, _ = setup_users(client)
+
+    malicious_payloads = [
+        b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert("xss")</script></svg>',
+        b'<svg xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="10" r="5" onload="alert(1)"/></svg>',
+        b'<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "system.dtd"><svg xmlns="http://www.w3.org/2000/svg"><text>XXE</text></svg>',
+        b'<svg xmlns="http://www.w3.org/2000/svg"><a href="https://evil.local/steal"><text>Click</text></a></svg>',
+    ]
+
+    for payload in malicious_payloads:
+        data = {'logo': (io.BytesIO(payload), 'test.svg', 'image/svg+xml')}
+        res = client.post(
+            '/api/admin/institution/logo',
+            headers={'Authorization': f'Bearer {admin_token}'},
+            data=data,
+            content_type='multipart/form-data'
+        )
+        assert res.status_code == 400
+        assert 'SVG validation failed' in res.json['error']
+
+
+def test_raster_validation_rejects_corrupted_and_invalid_files(client):
+    import io
+    admin_token, _ = setup_users(client)
+
+    # Empty file
+    res = client.post(
+        '/api/admin/institution/logo',
+        headers={'Authorization': f'Bearer {admin_token}'},
+        data={'logo': (io.BytesIO(b''), 'empty.png', 'image/png')},
+        content_type='multipart/form-data'
+    )
+    assert res.status_code == 400
+
+    # Corrupt fake PNG
+    res = client.post(
+        '/api/admin/institution/logo',
+        headers={'Authorization': f'Bearer {admin_token}'},
+        data={'logo': (io.BytesIO(b'not a real png file'), 'fake.png', 'image/png')},
+        content_type='multipart/form-data'
+    )
+    assert res.status_code == 400
+    assert 'Image validation failed' in res.json['error']
+
+    # Unsupported extension
+    res = client.post(
+        '/api/admin/institution/logo',
+        headers={'Authorization': f'Bearer {admin_token}'},
+        data={'logo': (io.BytesIO(b'content'), 'file.exe', 'application/octet-stream')},
+        content_type='multipart/form-data'
+    )
+    assert res.status_code == 400
+    assert 'Unsupported image extension' in res.json['error']
+
+
+def test_admin_can_delete_logo_and_reverts_to_default(client):
+    import io
+    from PIL import Image
+    admin_token, _ = setup_users(client)
+
+    img_io = io.BytesIO()
+    img = Image.new('RGB', (64, 64), color=(50, 100, 150))
+    img.save(img_io, format='PNG')
+    img_io.seek(0)
+
+    client.post(
+        '/api/admin/institution/logo',
+        headers={'Authorization': f'Bearer {admin_token}'},
+        data={'logo': (img_io, 'temp.png', 'image/png')},
+        content_type='multipart/form-data'
+    )
+
+    del_res = client.delete('/api/admin/institution/logo', headers={'Authorization': f'Bearer {admin_token}'})
+    assert del_res.status_code == 200
+    assert del_res.json['settings']['has_custom_logo'] is False
+
+    # Default SVG crest restored
+    res = client.get('/api/institution/logo')
+    assert res.status_code == 200
+    assert 'image/svg+xml' in res.content_type
+    assert b'shieldGrad' in res.data
+
+
+def test_teacher_cannot_upload_or_delete_logo(client):
+    import io
+    _, teacher_token = setup_users(client)
+
+    res = client.post(
+        '/api/admin/institution/logo',
+        headers={'Authorization': f'Bearer {teacher_token}'},
+        data={'logo': (io.BytesIO(b'data'), 'logo.png', 'image/png')},
+        content_type='multipart/form-data'
+    )
+    assert res.status_code == 403
+
+    del_res = client.delete(
+        '/api/admin/institution/logo',
+        headers={'Authorization': f'Bearer {teacher_token}'}
+    )
+    assert del_res.status_code == 403
+

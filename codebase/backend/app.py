@@ -29,10 +29,14 @@ def create_app(test_config=None):
         os.makedirs(data_dir, exist_ok=True)
         db_path = os.path.join(data_dir, 'classroom.db')
         backup_dir = os.path.join(local_app_data, 'ClassroomOS', 'backups')
+        branding_dir = os.path.join(data_dir, 'branding')
     else:
         os.makedirs(app.instance_path, exist_ok=True)
         db_path = os.path.join(app.instance_path, 'classroom.db')
         backup_dir = os.path.join(app.instance_path, 'backups')
+        branding_dir = os.path.join(app.instance_path, 'branding')
+
+    os.makedirs(branding_dir, exist_ok=True)
 
     default_config = {
         'SECRET_KEY': os.environ.get('SECRET_KEY'),
@@ -43,6 +47,7 @@ def create_app(test_config=None):
         'AUTH_LOCKOUT_MINUTES': 15,
         'CORS_ORIGINS': ['http://127.0.0.1:5173', 'http://localhost:5173'],
         'AUTO_BACKUP_BEFORE_MIGRATION': True,
+        'BRANDING_DIRECTORY': Path(branding_dir),
     }
     if os.environ.get('CLASSROOM_DESKTOP'):
         default_config['BACKUP_DIRECTORY'] = Path(backup_dir)
