@@ -25,7 +25,7 @@ def detect_faces():
 
     file = request.files.get('photo') or request.files.get('file')
 
-    if file.filename == '':
+    if not file or not file.filename:
         return jsonify({'success': False, 'error': 'Empty filename selected.'}), 400
 
     if not allowed_file(file.filename):

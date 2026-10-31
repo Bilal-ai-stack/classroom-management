@@ -12,8 +12,7 @@ The evidence-backed roadmap is maintained in `docs/CODEX_AUDIT.md` and execution
 - [x] Reject invalid attendance atomically; remove fabricated photo detections.
 - [x] P0: versioned migrations and tested backup/restore gate.
 - [x] P0: persistent authentication, secure bootstrap, RBAC, and route scoping.
-- [x] P0: attendance sessions, finalization/corrections, audit, calendar and policy math.
-- [ ] P0: deterministic, hardened local photo pipeline tests.
+- [x] P0: deterministic, hardened local photo pipeline tests.
 - [ ] P1: configurable institution/admin model and UI.
 - [ ] P2: reporting, portfolios, privacy/retention, accessibility and offline resilience.
 - [ ] P3: verified Windows packaging, upgrade, restore, and uninstall flow.

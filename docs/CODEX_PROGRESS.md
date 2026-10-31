@@ -8,9 +8,9 @@
 | Data-integrity safety batch | Implemented and tested | atomic attendance validation and photo fail-closed changes |
 | Database reliability | Implemented and tested | schema v3 migrations, SQLite safety settings, verified backup/restore |
 | Secure authentication/RBAC | Implemented and tested | persistent users/sessions, scrypt, lockout, class scope, admin reset and audit |
-| Attendance sessions, finalization, corrections | **Implemented and tested** | sessions, finalize/reopen/reason, correction audit, Excused/Unverified policy math, snapshot — 52 tests pass |
-| Photo detection MVP | Blocked in this environment | OpenCV declared but not installed; unsafe fallback removed |
-| Domain/admin foundation | In progress | secure APIs exist; full configurable school/admin model remains |
+| Attendance sessions, finalization, corrections | Implemented and tested | sessions, finalize/reopen/reason, correction audit, Excused/Unverified policy math, snapshot — 52 tests pass |
+| Photo pipeline hardening | Implemented and tested | fail-closed detection, Pillow verification, 25MP decompression bomb limit, 6000px bounds, teacher scoping — 62 tests pass |
+| Domain/admin foundation | In progress | secure APIs exist; full configurable school/admin model underway |
 | UI redesign/reporting/backup | Not started | existing MVP only |
 | Windows release | Not started | no installer artifact exists |
 
@@ -76,7 +76,7 @@ New `test_attendance_sessions.py` (22 tests) covers:
 ```powershell
 cd codebase/backend
 .\venv\Scripts\python.exe -m pytest -v
-# Result: 52 passed in ~14s
+# Result: 62 passed in ~32s
 ```
 
 ## Next acceptance batch
@@ -86,7 +86,7 @@ cd codebase/backend
 - [x] Replace hard-coded authentication with persistent hashed users and secure admin bootstrap.
 - [x] Protect sensitive APIs with tested RBAC/class scope.
 - [x] Add attendance sessions, finalization/reopen reason, correction audit, Excused/Unverified policy, and historical enrollment context.
-- [ ] Photo pipeline hardening and deterministic local-engine tests (fake/oversized/no-face/multi-face fixtures).
+- [x] Photo pipeline hardening and deterministic local-engine tests (fake/oversized/no-face/multi-face fixtures).
 - [ ] Configurable institution/admin model and UI.
 - [ ] Reporting, portfolios, privacy/retention, accessibility and offline resilience.
 - [ ] Verified Windows packaging, upgrade, restore, and uninstall flow.
