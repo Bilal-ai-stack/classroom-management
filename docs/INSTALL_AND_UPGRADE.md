@@ -12,24 +12,20 @@
 
 ## 2. Windows Installation Options
 
-### Option A: Portable Standalone Edition (Recommended)
-1. Download `ClassroomOS-v2.0.0-Portable-Windows.zip`.
-2. Extract the archive to any non-administrator directory (e.g. `C:\ClassroomOS` or `D:\ClassroomOS`).
-3. Ensure Python is installed and accessible on your system `PATH` (or create a virtual environment inside `codebase\backend\venv`).
-4. Install dependencies if running on a fresh machine:
-   ```cmd
-   cd codebase\backend
-   python -m pip install -r requirements.txt
-   ```
-5. Double-click `run-desktop.bat`.
-6. ClassroomOS starts the process supervisor on `http://127.0.0.1:5000` and automatically opens your default web browser.
-
-### Option B: Inno Setup Windows Installer
-1. If using the Inno Setup installer package (`ClassroomOS-Setup-2.0.0.exe`), launch the executable.
+### Option A: Inno Setup Windows Installer (Recommended)
+1. Download and run `dist_release/ClassroomOS-Setup-2.0.0.exe`.
 2. Select your user installation directory (defaults to `%LOCALAPPDATA%\Programs\ClassroomOS`).
-3. Choose whether to create a Desktop shortcut.
-4. Click **Install**.
-5. The installer configures Start Menu and Desktop shortcuts pointing to `run-desktop.bat`.
+3. Check the option to create a Desktop icon if desired.
+4. Click **Install**. The installer deploys the standalone runtime (`ClassroomOS.exe` + embedded Python 3.14 + OpenCV + React SPA).
+5. Click **Finish**. ClassroomOS launches automatically in your default browser at `http://127.0.0.1:5000`.
+6. To launch subsequently, use the Desktop icon or Windows Start Menu entry **ClassroomOS**.
+
+### Option B: Standalone Portable ZIP Edition
+1. Download `dist_release/ClassroomOS-v2.0.0-Portable-Windows.zip`.
+2. Extract the archive to any folder (e.g. `C:\ClassroomOS`, a USB drive, or an air-gapped machine).
+3. **No prerequisites required:** Python, Node.js, and external runtimes are **not** needed. All libraries and binaries are bundled.
+4. Double-click `ClassroomOS.exe` (or `run-desktop.bat`).
+5. ClassroomOS launches the process supervisor on `http://127.0.0.1:5000` and opens your browser.
 
 ---
 

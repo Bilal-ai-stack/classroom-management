@@ -1,5 +1,5 @@
 # ClassroomOS 2.0.0 — Production Release Build & Packaging Script
-# Generates production frontend build, portable desktop bundle, and SHA-256 checksums
+# Generates production frontend build, compiled standalone Windows binary, portable zip archive, Inno Setup installer, and SHA-256 checksums
 
 $ErrorActionPreference = "Stop"
 
@@ -14,9 +14,9 @@ Write-Host "==========================================================" -Foregro
 Write-Host "  ClassroomOS v$Version -- Release Build Pipeline" -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
-# 1. Build Production Frontend
+# 1. Build Production Frontend with Vite
 Write-Host ""
-Write-Host "[1/4] Building production frontend with Vite..." -ForegroundColor Yellow
+Write-Host "[1/5] Building production frontend with Vite..." -ForegroundColor Yellow
 Push-Location $FrontendDir
 try {
     npm run build
@@ -29,9 +29,9 @@ if (-not (Test-Path (Join-Path $FrontendDir "dist\index.html"))) {
 }
 Write-Host "[OK] Frontend build verified in codebase\frontend\dist" -ForegroundColor Green
 
-# 2. Clean Pycache & Temporary Files (targeted, avoids traversing venv)
+# 2. Clean Pycache & Temporary Files
 Write-Host ""
-Write-Host "[2/4] Cleaning Python caches and temporary files..." -ForegroundColor Yellow
+Write-Host "[2/5] Cleaning Python caches and temporary files..." -ForegroundColor Yellow
 $pycacheRel = @("__pycache__", "phase1_students\__pycache__", "phase2_attendance\__pycache__", "phase3_photo\__pycache__", "phase4_quality\__pycache__", "tests\__pycache__", ".pytest_cache")
 foreach ($rel in $pycacheRel) {
     $dir = Join-Path $BackendDir $rel
@@ -41,51 +41,35 @@ foreach ($rel in $pycacheRel) {
 }
 Write-Host "[OK] Temporary caches removed" -ForegroundColor Green
 
-# 3. Create Distribution Directories
-if (Test-Path $DistReleaseDir) { Remove-Item $DistReleaseDir -Recurse -Force }
-New-Item -ItemType Directory -Path $DistReleaseDir -Force | Out-Null
+# 3. Compile Standalone Windows Application with PyInstaller
+Write-Host ""
+Write-Host "[3/5] Verifying/Compiling standalone executable with PyInstaller..." -ForegroundColor Yellow
+$standaloneDir = Join-Path $BackendDir "dist\ClassroomOS"
+$pyinstallerExe = Join-Path $BackendDir "venv\Scripts\pyinstaller.exe"
 
-$PortableStaging = Join-Path $DistReleaseDir "ClassroomOS-v$Version-Portable"
-New-Item -ItemType Directory -Path $PortableStaging -Force | Out-Null
-
-# Copy Launcher & Root Files
-Copy-Item -Path (Join-Path $ProjectRoot "run-desktop.bat") -Destination $PortableStaging -Force
-Copy-Item -Path (Join-Path $ProjectRoot "README.md") -Destination $PortableStaging -Force
-
-# Copy Backend Files (core app code only, no venv/tests/instance)
-$StagingBackend = Join-Path $PortableStaging "codebase\backend"
-New-Item -ItemType Directory -Path $StagingBackend -Force | Out-Null
-
-$backendItems = @(
-    "app.py",
-    "launcher.py",
-    "db.py",
-    "database_tools.py",
-    "migrations.py",
-    "requirements.txt",
-    "haarcascade_frontalface_default.xml",
-    "phase1_students",
-    "phase2_attendance",
-    "phase3_photo",
-    "phase4_quality"
-)
-foreach ($item in $backendItems) {
-    $src = Join-Path $BackendDir $item
-    if (Test-Path $src) {
-        Copy-Item -Path $src -Destination $StagingBackend -Recurse -Force
+if (-not (Test-Path (Join-Path $standaloneDir "ClassroomOS.exe"))) {
+    if (Test-Path $pyinstallerExe) {
+        Write-Host "Running PyInstaller compilation..." -ForegroundColor Cyan
+        Push-Location $BackendDir
+        try {
+            & $pyinstallerExe --name ClassroomOS --noconfirm --onedir --clean --collect-all cv2 --collect-all PIL launcher.py
+        } finally {
+            Pop-Location
+        }
+    } else {
+        Write-Error "PyInstaller not found at $pyinstallerExe"
     }
 }
 
-# Copy Frontend Dist
-$StagingFrontend = Join-Path $PortableStaging "codebase\frontend"
-New-Item -ItemType Directory -Path $StagingFrontend -Force | Out-Null
-Copy-Item -Path (Join-Path $FrontendDir "dist") -Destination $StagingFrontend -Recurse -Force
+# Ensure built frontend SPA is present in the standalone executable directory
+$standaloneDist = Join-Path $standaloneDir "dist"
+if (Test-Path $standaloneDist) { Remove-Item $standaloneDist -Recurse -Force }
+Copy-Item -Path (Join-Path $FrontendDir "dist") -Destination $standaloneDist -Recurse -Force
+Write-Host "[OK] Standalone Windows binaries & frontend dist verified" -ForegroundColor Green
 
-Write-Host "[OK] Staged portable files" -ForegroundColor Green
-
-# 4. Inno Setup Compilation (if compiler available)
+# 4. Compile Inno Setup Windows Installer (.exe)
 Write-Host ""
-Write-Host "[3/4] Checking Inno Setup Compiler (ISCC.exe)..." -ForegroundColor Yellow
+Write-Host "[4/5] Checking Inno Setup Compiler (ISCC.exe)..." -ForegroundColor Yellow
 $isccCmd = Get-Command iscc.exe -ErrorAction SilentlyContinue
 $isccFromPath = $null
 if ($isccCmd) { $isccFromPath = $isccCmd.Source }
@@ -93,6 +77,8 @@ if ($isccCmd) { $isccFromPath = $isccCmd.Source }
 $InnoCompilerPaths = @(
     "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
     "C:\Program Files\Inno Setup 6\ISCC.exe",
+    "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
+    "$env:LOCALAPPDATA\Programs\Antigravity IDE\resources\app\node_modules\innosetup\bin\ISCC.exe",
     $isccFromPath
 )
 $Iscc = $InnoCompilerPaths | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
@@ -103,40 +89,56 @@ if ($Iscc) {
     & $Iscc (Join-Path $ProjectRoot "packaging\ClassroomOS.iss")
     Write-Host "[OK] Windows Installer generated in dist_installer\" -ForegroundColor Green
 } else {
-    Write-Host "Notice: ISCC.exe not found on system PATH. Inno Setup script is available at packaging\ClassroomOS.iss." -ForegroundColor Gray
+    Write-Warning "ISCC.exe not found on system PATH or default directories."
 }
 
-# 5. Create Portable Zip Archive
+# 5. Assemble Genuinely Standalone Portable Zip Distribution & Checksums
 Write-Host ""
-Write-Host "[4/4] Generating release zip archive and SHA-256 checksums..." -ForegroundColor Yellow
+Write-Host "[5/5] Packaging standalone portable distribution and calculating SHA-256..." -ForegroundColor Yellow
+
+if (Test-Path $DistReleaseDir) { Remove-Item $DistReleaseDir -Recurse -Force }
+New-Item -ItemType Directory -Path $DistReleaseDir -Force | Out-Null
+
+$PortableStaging = Join-Path $DistReleaseDir "ClassroomOS-v$Version-Portable"
+New-Item -ItemType Directory -Path $PortableStaging -Force | Out-Null
+
+# Copy the complete compiled standalone distribution
+Copy-Item -Path "$standaloneDir\*" -Destination $PortableStaging -Recurse -Force
+Copy-Item -Path (Join-Path $ProjectRoot "README.md") -Destination $PortableStaging -Force
+
+# Create convenient root batch wrapper that launches the standalone executable
+$batContent = "@echo off`r`nstart `"`" `"%~dp0ClassroomOS.exe`" %*`r`n"
+Set-Content -Path (Join-Path $PortableStaging "run-desktop.bat") -Value $batContent -Encoding ASCII
+
+# Compress Portable Distribution Archive
 $ZipPath = Join-Path $DistReleaseDir "ClassroomOS-v$Version-Portable-Windows.zip"
 Compress-Archive -Path "$PortableStaging\*" -DestinationPath $ZipPath -CompressionLevel Optimal
 
 # Clean up uncompressed staging directory
 Remove-Item $PortableStaging -Recurse -Force
 
-# Calculate Checksums
-$ChecksumFile = Join-Path $DistReleaseDir "SHA256SUMS.txt"
-$ZipHash = (Get-FileHash -Path $ZipPath -Algorithm SHA256).Hash
-$ChecksumLines = @(
-    "$ZipHash  ClassroomOS-v$Version-Portable-Windows.zip"
-)
+# Copy Installer to dist_release if generated
+$installerSource = Join-Path $DistInstallerDir "ClassroomOS-Setup-$Version.exe"
+if (Test-Path $installerSource) {
+    Copy-Item -Path $installerSource -Destination $DistReleaseDir -Force
+}
 
-# Include installer hash if generated
-if (Test-Path $DistInstallerDir) {
-    Get-ChildItem -Path $DistInstallerDir -Filter "*.exe" | ForEach-Object {
-        $InstallerHash = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash
-        $ChecksumLines += "$InstallerHash  $($_.Name)"
-        Copy-Item -Path $_.FullName -Destination $DistReleaseDir -Force
-    }
+# Calculate Cryptographic Hashes for all release artifacts
+$ChecksumFile = Join-Path $DistReleaseDir "SHA256SUMS.txt"
+$ChecksumLines = @()
+
+Get-ChildItem -Path $DistReleaseDir -File | Where-Object { $_.Name -ne "SHA256SUMS.txt" } | ForEach-Object {
+    $hash = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash
+    $ChecksumLines += "$hash  $($_.Name)"
 }
 
 $ChecksumLines | Out-File -FilePath $ChecksumFile -Encoding utf8
 
 Write-Host ""
 Write-Host "==========================================================" -ForegroundColor Green
-Write-Host "  Release Build Complete!" -ForegroundColor Green
-Write-Host "  Package:  $ZipPath" -ForegroundColor White
-Write-Host "  SHA-256:  $ZipHash" -ForegroundColor White
-Write-Host "  Checksum: $ChecksumFile" -ForegroundColor White
+Write-Host "  ClassroomOS Release Build & Packaging Complete!" -ForegroundColor Green
+foreach ($line in $ChecksumLines) {
+    Write-Host "  $line" -ForegroundColor White
+}
+Write-Host "  Manifest: $ChecksumFile" -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Green

@@ -1,4 +1,5 @@
 import os
+import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
 import click
@@ -81,9 +82,16 @@ def create_app(test_config=None):
     # Serve built SPA frontend when dist exists
     frontend_dist = os.environ.get('FRONTEND_DIST_PATH')
     if not frontend_dist and not app.config.get('TESTING'):
-        candidate = Path(__file__).resolve().parent.parent / 'frontend' / 'dist'
-        if candidate.is_dir():
-            frontend_dist = str(candidate)
+        candidates = [
+            Path(__file__).resolve().parent.parent / 'frontend' / 'dist',
+            Path(getattr(sys, '_MEIPASS', '')) / 'dist' if hasattr(sys, '_MEIPASS') else None,
+            Path(sys.executable).resolve().parent / 'dist' if getattr(sys, 'frozen', False) else None,
+            Path(sys.executable).resolve().parent / 'codebase' / 'frontend' / 'dist' if getattr(sys, 'frozen', False) else None,
+        ]
+        for cand in candidates:
+            if cand and cand.is_dir():
+                frontend_dist = str(cand)
+                break
 
     if frontend_dist and os.path.isdir(frontend_dist):
         @app.route('/', defaults={'path': ''})

@@ -5,7 +5,7 @@
 #define MyAppVersion "2.0.0"
 #define MyAppPublisher "Bilal AI Stack"
 #define MyAppURL "https://github.com/Bilal-ai-stack/classroom-management"
-#define MyAppExeName "run-desktop.bat"
+#define MyAppExeName "ClassroomOS.exe"
 
 [Setup]
 AppId={{C78D21B5-9B7E-4E61-8C53-A12B890F3B91}
@@ -33,9 +33,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "..\run-desktop.bat"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\codebase\backend\*"; DestDir: "{app}\codebase\backend"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\codebase\frontend\dist\*"; DestDir: "{app}\codebase\frontend\dist"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Standalone Windows distribution directory compiled with PyInstaller
+Source: "..\codebase\backend\dist\ClassroomOS\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
@@ -43,10 +42,9 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; WorkingDir: "{app}"
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: shellexec postinstall nowait skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: postinstall nowait skipifsilent
 
 [UninstallDelete]
 ; Clean up runtime caches and temporary files, BUT preserve {localappdata}\ClassroomOS\data
-Type: filesandordirs; Name: "{app}\codebase\backend\__pycache__"
-Type: filesandordirs; Name: "{app}\codebase\backend\instance\temp_crops"
+Type: filesandordirs; Name: "{app}\dist"
 Type: files; Name: "{app}\*.log"

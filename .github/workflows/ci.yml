@@ -97,6 +97,50 @@ jobs:
           echo "- **Framework**: React 19 + Vite 8" >> $GITHUB_STEP_SUMMARY
           echo "- **Bundle Size**: Ready for deployment" >> $GITHUB_STEP_SUMMARY
 
+  windows-packaging:
+    name: Windows Packaging & Release Artifacts
+    needs: [backend-ci, frontend-ci]
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: codebase/backend/requirements.txt
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: codebase/frontend/package-lock.json
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress
+
+      - name: Install dependencies
+        run: |
+          cd codebase/backend
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+          cd ../frontend
+          npm ci || npm install
+
+      - name: Build Standalone Windows Packages
+        run: powershell -ExecutionPolicy Bypass -File build-release.ps1
+
+      - name: Upload Windows Release Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClassroomOS-Windows-Release
+          path: dist_release/*
+          retention-days: 30
+
   deploy-cd:
     name: Continuous Deployment (GitHub Pages)
     needs: [backend-ci, frontend-ci]

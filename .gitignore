@@ -15,6 +15,9 @@ tmp_cache/
 tmp_pytest/
 backend/instance/
 codebase/backend/instance/
+codebase/backend/build/
+codebase/backend/dist/
+dist_installer/
 backend/uploads/temp/
 
 # Node / Frontend
