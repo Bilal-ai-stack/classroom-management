@@ -31,6 +31,7 @@ import {
   Trash2,
   ShieldCheck,
   Shield,
+  Printer,
   Lock,
   LogIn
 } from 'lucide-react';
@@ -1123,27 +1124,41 @@ export default function App() {
               </div>
 
               <button
-                className="btn btn-primary"
-                onClick={() => {
-                  const recordsToExport = reportData.records.length > 0 ? reportData.records : students.map(s => ({
-                    roll_number: s.roll_number,
-                    student_name: s.full_name,
-                    class_name: s.class_name,
-                    date: attendanceDate,
-                    status: 'Present',
-                    remarks: ''
-                  }));
-                  const csvContent = "data:text/csv;charset=utf-8," +
-                    "Roll Number,Student Name,Class,Date,Status,Remarks\n" +
-                    recordsToExport.map(r => `"${r.roll_number}","${r.student_name}","${r.class_name}","${r.date}","${r.status}","${r.remarks || ''}"`).join("\n");
-                  const encodedUri = encodeURI(csvContent);
-                  const link = document.createElement("a");
-                  link.setAttribute("href", encodedUri);
-                  link.setAttribute("download", `attendance_report_${reportStartDate}_to_${reportEndDate}.csv`);
-                  document.body.appendChild(link);
-                  link.click();
-                  document.body.removeChild(link);
-                  showToast('Attendance report CSV downloaded successfully!');
+                className="btn btn-secondary no-print"
+                onClick={() => window.print()}
+                title="Print report or save as PDF"
+                style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                <Printer size={16} /> Print / Save PDF
+              </button>
+
+              <button
+                className="btn btn-primary no-print"
+                onClick={async () => {
+                  try {
+                    const token = localStorage.getItem('classroom_token');
+                    const params = new URLSearchParams({
+                      start_date: reportStartDate,
+                      end_date: reportEndDate,
+                      class_name: reportClass
+                    });
+                    const res = await fetch(`/api/reports/attendance/csv?${params.toString()}`, {
+                      headers: token ? { Authorization: `Bearer ${token}` } : {}
+                    });
+                    if (!res.ok) throw new Error('Failed to download report');
+                    const blob = await res.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    const safeClass = reportClass.replace(/ /g, '_');
+                    link.download = `attendance_report_${safeClass}_${reportStartDate}_to_${reportEndDate}.csv`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    showToast('Attendance report CSV downloaded successfully!');
+                  } catch (err) {
+                    showToast(err.message || 'CSV export failed');
+                  }
                 }}
               >
                 <BookOpen size={16} /> Export CSV Report

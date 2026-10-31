@@ -11,8 +11,8 @@
 | Attendance sessions, finalization, corrections | Implemented and tested | sessions, finalize/reopen/reason, correction audit, Excused/Unverified policy math, snapshot — 52 tests pass |
 | Photo pipeline hardening | Implemented and tested | fail-closed detection, Pillow verification, 25MP decompression bomb limit, 6000px bounds, teacher scoping — 62 tests pass |
 | Configurable institution / admin foundation | Implemented and tested | schema v4 migrations, institution profile, classes/sections, staff accounts, audit log viewer, modular AdminSettings UI — 72 tests pass |
-| Reporting, portfolios, privacy/resilience | Next up | printable/PDF reports, student portfolios, privacy retention |
-| Windows release | Not started | no installer artifact exists |
+| Reporting, portfolios, privacy/resilience | Implemented and tested | RFC 4180 CSV export stream, Print/PDF export styles, privacy audit/purge, teacher scoping — 76 tests pass |
+| Windows release | In progress / Next up | native launcher/wrapper & packaging flow |
 
 ## Implemented in this batch (2026-10-31)
 
@@ -76,7 +76,7 @@ New `test_attendance_sessions.py` (22 tests) covers:
 ```powershell
 cd codebase/backend
 .\venv\Scripts\python.exe -m pytest -v
-# Result: 72 passed in ~25s
+# Result: 76 passed in ~28s
 ```
 
 ## Next acceptance batch
@@ -88,7 +88,7 @@ cd codebase/backend
 - [x] Add attendance sessions, finalization/reopen reason, correction audit, Excused/Unverified policy, and historical enrollment context.
 - [x] Photo pipeline hardening and deterministic local-engine tests (fake/oversized/no-face/multi-face fixtures).
 - [x] Configurable institution/admin model and UI.
-- [ ] Reporting, portfolios, privacy/retention, accessibility and offline resilience.
+- [x] Reporting, portfolios, privacy/retention, accessibility and offline resilience.
 - [ ] Verified Windows packaging, upgrade, restore, and uninstall flow.
 
 ## Blockers and risks

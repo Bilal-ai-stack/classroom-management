@@ -14,7 +14,7 @@ The evidence-backed roadmap is maintained in `docs/CODEX_AUDIT.md` and execution
 - [x] P0: persistent authentication, secure bootstrap, RBAC, and route scoping.
 - [x] P0: deterministic, hardened local photo pipeline tests.
 - [x] P1: configurable institution/admin model and UI.
-- [ ] P2: reporting, portfolios, privacy/retention, accessibility and offline resilience.
+- [x] P2: reporting, portfolios, privacy/retention, accessibility and offline resilience.
 - [ ] P3: verified Windows packaging, upgrade, restore, and uninstall flow.
 
 ---

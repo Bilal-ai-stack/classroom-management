@@ -1,5 +1,7 @@
+import csv
+import io
 from datetime import date
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, Response
 from sqlalchemy import func
 from db import db
 from phase1_students.models import Student
@@ -630,3 +632,58 @@ def get_attendance_report():
         'timeline': timeline,
         'records': [a.to_dict() for a in attendances]
     }), 200
+
+
+@attendance_bp.route('/reports/attendance/csv', methods=['GET'])
+@require_auth
+def export_attendance_csv():
+    """Stream an RFC 4180 compliant CSV export for the selected date range and class."""
+    start_date = request.args.get('start_date', '').strip()
+    end_date = request.args.get('end_date', '').strip()
+    class_name = request.args.get('class_name', '').strip()
+
+    if request.current_user.role == 'teacher':
+        if class_name and class_name != request.current_user.assigned_class:
+            return jsonify({'success': False, 'error': 'You do not have permission to export this class.'}), 403
+        class_name = request.current_user.assigned_class or ''
+
+    query = Attendance.query.join(Student)
+    if class_name and class_name != 'All Classes':
+        query = query.filter(func.coalesce(Attendance.snapshot_class_name, Student.class_name) == class_name)
+    if start_date:
+        query = query.filter(Attendance.date >= start_date)
+    if end_date:
+        query = query.filter(Attendance.date <= end_date)
+
+    attendances = query.order_by(Attendance.date.asc(), Student.roll_number.asc()).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output, lineterminator='\r\n')
+    writer.writerow(['Date', 'Roll Number', 'Student Name', 'Class', 'Section', 'Status', 'Remarks'])
+
+    for att in attendances:
+        st = att.student
+        c_name = att.snapshot_class_name or (st.class_name if st else '')
+        sec = att.snapshot_section or (st.section if st else '')
+        writer.writerow([
+            att.date,
+            st.roll_number if st else '',
+            st.full_name if st else '',
+            c_name,
+            sec,
+            att.status,
+            att.remarks or ''
+        ])
+
+    csv_data = output.getvalue()
+    safe_class = (class_name or 'All_Classes').replace(' ', '_')
+    filename = f"attendance_report_{safe_class}_{start_date or 'start'}_to_{end_date or 'end'}.csv"
+    return Response(
+        csv_data,
+        mimetype='text/csv',
+        headers={
+            'Content-Disposition': f'attachment; filename="{filename}"',
+            'Content-Type': 'text/csv; charset=utf-8'
+        }
+    )
+
