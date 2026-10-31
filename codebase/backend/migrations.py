@@ -103,6 +103,60 @@ MIGRATIONS = (
         "ALTER TABLE attendances ADD COLUMN updated_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL",
         "CREATE INDEX IF NOT EXISTS ix_attendances_session ON attendances (session_id)",
     )),
+    (4, 'institution_settings_and_academic_structure', (
+        """CREATE TABLE IF NOT EXISTS institution_settings (
+            id INTEGER NOT NULL PRIMARY KEY,
+            institution_name VARCHAR(150) NOT NULL DEFAULT 'Springfield Academy',
+            institution_code VARCHAR(50) NOT NULL DEFAULT 'SCH-001',
+            academic_year VARCHAR(20) NOT NULL DEFAULT '2026-2027',
+            current_term VARCHAR(50) NOT NULL DEFAULT 'Fall 2026',
+            contact_email VARCHAR(254) NOT NULL DEFAULT 'admin@school.local',
+            contact_phone VARCHAR(50) DEFAULT '',
+            address TEXT DEFAULT '',
+            timezone VARCHAR(50) NOT NULL DEFAULT 'UTC',
+            min_attendance_warning_rate REAL NOT NULL DEFAULT 75.0,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NOT NULL,
+            CHECK (id = 1)
+        )""",
+        """CREATE TABLE IF NOT EXISTS academic_classes (
+            id INTEGER NOT NULL PRIMARY KEY,
+            name VARCHAR(50) NOT NULL,
+            section VARCHAR(20) NOT NULL DEFAULT 'A',
+            room_number VARCHAR(30) DEFAULT '',
+            capacity INTEGER NOT NULL DEFAULT 35,
+            class_teacher_user_id INTEGER,
+            is_active BOOLEAN NOT NULL DEFAULT 1,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NOT NULL,
+            CONSTRAINT uq_academic_class_section UNIQUE (name, section),
+            FOREIGN KEY(class_teacher_user_id) REFERENCES users (id) ON DELETE SET NULL
+        )""",
+        """CREATE TABLE IF NOT EXISTS academic_terms (
+            id INTEGER NOT NULL PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            start_date VARCHAR(10) NOT NULL,
+            end_date VARCHAR(10) NOT NULL,
+            is_active BOOLEAN NOT NULL DEFAULT 0,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NOT NULL
+        )""",
+        "CREATE INDEX IF NOT EXISTS ix_academic_classes_name ON academic_classes (name)",
+        """INSERT OR IGNORE INTO institution_settings (id, institution_name, institution_code, academic_year, current_term, contact_email, timezone, min_attendance_warning_rate, created_at, updated_at)
+        VALUES (1, 'Springfield Academy', 'SCH-001', '2026-2027', 'Fall 2026', 'admin@school.local', 'UTC', 75.0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
+        """INSERT OR IGNORE INTO academic_classes (id, name, section, room_number, capacity, is_active, created_at, updated_at)
+        VALUES 
+        (1, 'Grade 1', 'A', '101', 30, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+        (2, 'Grade 2', 'A', '102', 30, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+        (3, 'Grade 3', 'A', '103', 30, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+        (4, 'Grade 4', 'A', '201', 35, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+        (5, 'Grade 5', 'A', '202', 35, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+        (6, 'Grade 5', 'B', '203', 35, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
+        """INSERT OR IGNORE INTO academic_terms (id, name, start_date, end_date, is_active, created_at, updated_at)
+        VALUES 
+        (1, 'Fall 2026 Term', '2026-08-15', '2026-12-20', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+        (2, 'Spring 2027 Term', '2027-01-10', '2027-05-30', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
+    )),
 )
 
 

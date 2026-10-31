@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from db import db
 from phase1_students.models import Student
 from phase4_quality.auth import require_auth, require_roles
+from phase4_quality.institution_models import AcademicClass
 from phase4_quality.models import record_audit
 
 students_bp = Blueprint('students', __name__)
@@ -186,10 +187,17 @@ def archive_student(student_id):
 @require_auth
 def list_classes():
     """List all available classes and sections for dropdown filters."""
-    records = db.session.query(Student.class_name, Student.section).filter_by(is_active=True).distinct().all()
-    classes = sorted(list({f"{r[0]}" for r in records}))
     if request.current_user.role == 'teacher':
         classes = [request.current_user.assigned_class] if request.current_user.assigned_class else []
+        return jsonify({'success': True, 'classes': classes}), 200
+
+    academic_classes = AcademicClass.query.filter_by(is_active=True).all()
+    if academic_classes:
+        classes = sorted(list({c.name for c in academic_classes}))
+    else:
+        records = db.session.query(Student.class_name).filter_by(is_active=True).distinct().all()
+        classes = sorted(list({r[0] for r in records}))
+
     return jsonify({
         'success': True,
         'classes': classes if classes else ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5']

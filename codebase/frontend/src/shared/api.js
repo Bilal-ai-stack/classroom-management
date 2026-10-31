@@ -129,3 +129,44 @@ export const privacyApi = {
   })
 };
 
+// Phase 1 Administration & Institution Configuration API
+export const adminApi = {
+  getInstitution: () => apiRequest('/admin/institution'),
+  updateInstitution: (data) => apiRequest('/admin/institution', {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  }),
+  getClasses: (includeInactive = false) => apiRequest(`/admin/classes${includeInactive ? '?include_inactive=true' : ''}`),
+  createClass: (data) => apiRequest('/admin/classes', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
+  updateClass: (id, data) => apiRequest(`/admin/classes/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  }),
+  deleteClass: (id) => apiRequest(`/admin/classes/${id}`, {
+    method: 'DELETE'
+  }),
+  getUsers: () => apiRequest('/admin/users'),
+  createUser: (data) => apiRequest('/auth/users', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
+  toggleUserStatus: (id, isActive) => apiRequest(`/admin/users/${id}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ is_active: isActive })
+  }),
+  resetPassword: (id, newPassword) => apiRequest(`/auth/users/${id}/reset-password`, {
+    method: 'POST',
+    body: JSON.stringify({ new_password: newPassword })
+  }),
+  getTerms: () => apiRequest('/admin/terms'),
+  createTerm: (data) => apiRequest('/admin/terms', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
+  getAuditEvents: () => apiRequest('/admin/audit-events')
+};
+
+

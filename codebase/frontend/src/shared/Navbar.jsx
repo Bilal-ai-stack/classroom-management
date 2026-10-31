@@ -13,7 +13,8 @@ import {
   LogOut,
   LogIn,
   Menu,
-  X as CloseIcon
+  X as CloseIcon,
+  Settings
 } from 'lucide-react';
 
 export default function Navbar({
@@ -53,6 +54,7 @@ export default function Navbar({
     { id: 'attendance',   label: 'Attendance',       icon: CalendarCheck    },
     { id: 'photo-review', label: 'Photo Review',     icon: Camera           },
     { id: 'reports',      label: 'Reports',          icon: BarChart3        },
+    ...(teacherProfile?.role === 'admin' ? [{ id: 'admin', label: 'Admin', icon: Settings }] : [])
   ];
 
   return (

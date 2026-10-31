@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Navbar from './shared/Navbar';
 import Modal from './shared/Modal';
 import StatusBadge from './shared/StatusBadge';
+import AdminSettings from './pages/AdminSettings';
 import { studentApi, attendanceApi, photoApi, authApi, privacyApi } from './shared/api';
 import {
   Users,
@@ -29,6 +30,7 @@ import {
   FileSpreadsheet,
   Trash2,
   ShieldCheck,
+  Shield,
   Lock,
   LogIn
 } from 'lucide-react';
@@ -717,6 +719,19 @@ export default function App() {
                     </div>
                     <ArrowRight size={18} className="arrow-icon" />
                   </div>
+
+                  {teacherProfile?.role === 'admin' && (
+                    <div
+                      className="quick-action-item"
+                      onClick={() => setActiveTab('admin')}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <div style={{ color: 'var(--primary)' }}><Shield size={20} /></div>
+                        <span>Institutional Administration & Staff</span>
+                      </div>
+                      <ArrowRight size={18} className="arrow-icon" />
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1451,6 +1466,11 @@ export default function App() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* ADMIN SETTINGS TAB */}
+        {activeTab === 'admin' && (
+          <AdminSettings teacherProfile={teacherProfile} onShowToast={showToast} />
         )}
       </main>
 

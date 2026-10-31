@@ -10,8 +10,8 @@
 | Secure authentication/RBAC | Implemented and tested | persistent users/sessions, scrypt, lockout, class scope, admin reset and audit |
 | Attendance sessions, finalization, corrections | Implemented and tested | sessions, finalize/reopen/reason, correction audit, Excused/Unverified policy math, snapshot — 52 tests pass |
 | Photo pipeline hardening | Implemented and tested | fail-closed detection, Pillow verification, 25MP decompression bomb limit, 6000px bounds, teacher scoping — 62 tests pass |
-| Domain/admin foundation | In progress | secure APIs exist; full configurable school/admin model underway |
-| UI redesign/reporting/backup | Not started | existing MVP only |
+| Configurable institution / admin foundation | Implemented and tested | schema v4 migrations, institution profile, classes/sections, staff accounts, audit log viewer, modular AdminSettings UI — 72 tests pass |
+| Reporting, portfolios, privacy/resilience | Next up | printable/PDF reports, student portfolios, privacy retention |
 | Windows release | Not started | no installer artifact exists |
 
 ## Implemented in this batch (2026-10-31)
@@ -76,7 +76,7 @@ New `test_attendance_sessions.py` (22 tests) covers:
 ```powershell
 cd codebase/backend
 .\venv\Scripts\python.exe -m pytest -v
-# Result: 62 passed in ~32s
+# Result: 72 passed in ~25s
 ```
 
 ## Next acceptance batch
@@ -87,7 +87,7 @@ cd codebase/backend
 - [x] Protect sensitive APIs with tested RBAC/class scope.
 - [x] Add attendance sessions, finalization/reopen reason, correction audit, Excused/Unverified policy, and historical enrollment context.
 - [x] Photo pipeline hardening and deterministic local-engine tests (fake/oversized/no-face/multi-face fixtures).
-- [ ] Configurable institution/admin model and UI.
+- [x] Configurable institution/admin model and UI.
 - [ ] Reporting, portfolios, privacy/retention, accessibility and offline resilience.
 - [ ] Verified Windows packaging, upgrade, restore, and uninstall flow.
 

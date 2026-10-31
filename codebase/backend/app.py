@@ -13,9 +13,11 @@ from phase2_attendance.models import Attendance
 from phase2_attendance.routes import attendance_bp
 from phase3_photo.routes import photo_bp
 from phase4_quality.auth import auth_bp
+from phase4_quality.admin_routes import admin_bp
 from phase4_quality.privacy import privacy_bp
 from phase4_quality.errors import register_error_handlers
 from phase4_quality.models import User, AuthSession, AuditEvent
+from phase4_quality.institution_models import InstitutionSettings, AcademicClass, AcademicTerm
 from phase4_quality.auth import require_auth
 
 def create_app(test_config=None):
@@ -52,6 +54,7 @@ def create_app(test_config=None):
     app.register_blueprint(attendance_bp, url_prefix='/api')
     app.register_blueprint(photo_bp, url_prefix='/api')
     app.register_blueprint(auth_bp, url_prefix='/api')
+    app.register_blueprint(admin_bp, url_prefix='/api')
     app.register_blueprint(privacy_bp, url_prefix='/api')
 
     # Register Global JSON Error Handlers
