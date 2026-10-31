@@ -1,103 +1,149 @@
 import pytest
+
 from app import create_app
 from db import db
+from phase1_students.models import Student
+from phase4_quality.models import AuditEvent, AuthSession, User
+
 
 @pytest.fixture
 def client():
     app = create_app({
         'TESTING': True,
         'SQLALCHEMY_DATABASE_URI': 'sqlite:///:memory:',
-        'SECRET_KEY': 'test-secret-key'
+        'SECRET_KEY': 'test-secret-key',
+        'AUTH_MAX_FAILED_LOGINS': 3,
     })
-    with app.test_client() as client:
-        with app.app_context():
-            db.create_all()
-        yield client
+    with app.test_client() as test_client:
+        yield test_client
 
-def test_login_success(client):
-    res = client.post('/api/auth/login', json={
-        'email': 'teacher@school.edu',
-        'password': 'classroom2026'
+
+def bootstrap(client):
+    return client.post('/api/auth/bootstrap', json={
+        'email': 'admin@example.test',
+        'full_name': 'Test Administrator',
+        'password': 'SecureAdmin123',
     })
-    assert res.status_code == 200
-    assert res.json['success'] is True
-    assert 'token' in res.json
-    assert res.json['teacher']['email'] == 'teacher@school.edu'
 
-def test_login_invalid_password(client):
-    res = client.post('/api/auth/login', json={
-        'email': 'teacher@school.edu',
-        'password': 'wrongpassword'
+
+def authorized(token):
+    return {'Authorization': f'Bearer {token}'}
+
+
+def test_bootstrap_is_one_time_and_password_is_hashed(client):
+    response = bootstrap(client)
+    assert response.status_code == 201
+    assert response.json['teacher']['role'] == 'admin'
+    assert bootstrap(client).status_code == 409
+    with client.application.app_context():
+        user = User.query.one()
+        assert user.password_hash != 'SecureAdmin123'
+        assert user.password_hash.startswith('scrypt:')
+        assert AuditEvent.query.filter_by(action='admin.bootstrap').count() == 1
+
+
+def test_login_session_logout_and_revocation(client):
+    bootstrap(client)
+    login = client.post('/api/auth/login', json={
+        'email': 'admin@example.test', 'password': 'SecureAdmin123'
     })
-    assert res.status_code == 401
-    assert res.json['success'] is False
-    assert 'Invalid email or password' in res.json['error']
+    assert login.status_code == 200
+    headers = authorized(login.json['token'])
+    assert client.get('/api/auth/me', headers=headers).status_code == 200
+    assert client.post('/api/auth/logout', headers=headers).status_code == 200
+    assert client.get('/api/auth/me', headers=headers).status_code == 401
+    with client.application.app_context():
+        assert AuthSession.query.filter(AuthSession.revoked_at.isnot(None)).count() == 1
 
-def test_login_missing_fields(client):
-    res = client.post('/api/auth/login', json={'email': 'teacher@school.edu'})
-    assert res.status_code == 400
-    assert res.json['success'] is False
 
-def test_get_current_user_unauthenticated(client):
-    res = client.get('/api/auth/me')
-    assert res.status_code == 200
-    assert res.json['success'] is True
-    assert res.json['authenticated'] is False
-
-def test_get_current_user_authenticated(client):
-    # Log in first
-    login_res = client.post('/api/auth/login', json={
-        'email': 'teacher@school.edu',
-        'password': 'classroom2026'
+def test_login_validation_and_persistent_lockout(client):
+    bootstrap(client)
+    assert client.post('/api/auth/login', json={'email': 'admin@example.test'}).status_code == 400
+    for _ in range(3):
+        response = client.post('/api/auth/login', json={
+            'email': 'admin@example.test', 'password': 'WrongPassword123'
+        })
+        assert response.status_code == 401
+    locked = client.post('/api/auth/login', json={
+        'email': 'admin@example.test', 'password': 'SecureAdmin123'
     })
-    token = login_res.json['token']
+    assert locked.status_code == 429
+    with client.application.app_context():
+        assert User.query.one().locked_until is not None
 
-    res = client.get('/api/auth/me', headers={'Authorization': f'Bearer {token}'})
-    assert res.status_code == 200
-    assert res.json['success'] is True
-    assert res.json['authenticated'] is True
-    assert res.json['teacher']['name'] == 'Ms. Clara Vance'
 
-def test_logout(client):
-    login_res = client.post('/api/auth/login', json={
-        'email': 'teacher@school.edu',
-        'password': 'classroom2026'
+def test_admin_creates_teacher_and_rbac_scopes_student_data(client):
+    admin = bootstrap(client)
+    admin_headers = authorized(admin.json['token'])
+    created = client.post('/api/auth/users', headers=admin_headers, json={
+        'email': 'teacher@example.test',
+        'full_name': 'Test Teacher',
+        'password': 'SecureTeacher123',
+        'role': 'teacher',
+        'assigned_class': 'Grade 1',
     })
-    token = login_res.json['token']
+    assert created.status_code == 201
 
-    res = client.post('/api/auth/logout', headers={'Authorization': f'Bearer {token}'})
-    assert res.status_code == 200
-    assert res.json['success'] is True
+    with client.application.app_context():
+        db.session.add_all([
+            Student(roll_number='G1-1', full_name='Grade One Student', class_name='Grade 1', section='A', enrollment_date='2026-01-01'),
+            Student(roll_number='G2-1', full_name='Grade Two Student', class_name='Grade 2', section='A', enrollment_date='2026-01-01'),
+        ])
+        db.session.commit()
 
-def test_privacy_policy(client):
-    res = client.get('/api/privacy/policy')
-    assert res.status_code == 200
-    assert res.json['success'] is True
-    assert 'compliance' in res.json['policy']
-    assert any('Zero Biometric' in c for c in res.json['policy']['compliance'])
+    login = client.post('/api/auth/login', json={
+        'email': 'teacher@example.test', 'password': 'SecureTeacher123'
+    })
+    teacher_headers = authorized(login.json['token'])
+    students = client.get('/api/students', headers=teacher_headers)
+    assert students.status_code == 200
+    assert [student['class_name'] for student in students.json['students']] == ['Grade 1']
+    assert client.get('/api/students/2', headers=teacher_headers).status_code == 403
+    assert client.post('/api/students', headers=teacher_headers, json={}).status_code == 403
+    assert client.get('/api/admin/audit-events', headers=teacher_headers).status_code == 403
 
-def test_privacy_purge(client):
-    res = client.post('/api/privacy/purge')
-    assert res.status_code == 200
-    assert res.json['success'] is True
-    assert 'deleted_count' in res.json
 
-def test_privacy_audit(client):
-    res = client.get('/api/privacy/audit')
-    assert res.status_code == 200
-    assert res.json['success'] is True
-    assert res.json['audit']['cloud_sync_enabled'] is False
-    assert res.json['audit']['status'] == 'Compliant'
+def test_admin_password_reset_revokes_sessions_and_is_audited(client):
+    admin = bootstrap(client)
+    admin_headers = authorized(admin.json['token'])
+    created = client.post('/api/auth/users', headers=admin_headers, json={
+        'email': 'teacher@example.test', 'full_name': 'Teacher',
+        'password': 'SecureTeacher123', 'role': 'teacher', 'assigned_class': 'Grade 1'
+    })
+    user_id = created.json['user']['id']
+    teacher_login = client.post('/api/auth/login', json={
+        'email': 'teacher@example.test', 'password': 'SecureTeacher123'
+    })
+    teacher_headers = authorized(teacher_login.json['token'])
 
-def test_json_404_error_handler(client):
-    res = client.get('/api/non-existent-endpoint')
-    assert res.status_code == 404
-    assert res.json['success'] is False
-    assert res.json['status_code'] == 404
+    reset = client.post(f'/api/auth/users/{user_id}/reset-password', headers=admin_headers, json={
+        'new_password': 'Replacement456'
+    })
+    assert reset.status_code == 200
+    assert client.get('/api/auth/me', headers=teacher_headers).status_code == 401
+    assert client.post('/api/auth/login', json={
+        'email': 'teacher@example.test', 'password': 'Replacement456'
+    }).status_code == 200
+    audit = client.get('/api/admin/audit-events', headers=admin_headers)
+    assert any(event['action'] == 'user.password_reset' for event in audit.json['events'])
 
-def test_json_405_error_handler(client):
-    # /api/health only accepts GET
-    res = client.post('/api/health')
-    assert res.status_code == 405
-    assert res.json['success'] is False
-    assert res.json['status_code'] == 405
+
+def test_student_and_dashboard_data_require_authentication(client):
+    bootstrap(client)
+    assert client.get('/api/students').status_code == 401
+    assert client.get('/api/dashboard/stats').status_code == 401
+    assert client.get('/api/reports/attendance').status_code == 401
+
+
+def test_privacy_and_json_error_handlers(client):
+    admin = bootstrap(client)
+    headers = authorized(admin.json['token'])
+    assert client.get('/api/privacy/policy').status_code == 200
+    assert client.post('/api/privacy/purge', headers=headers).status_code == 200
+    assert client.get('/api/privacy/audit', headers=headers).status_code == 200
+    not_found = client.get('/api/non-existent-endpoint')
+    assert not_found.status_code == 404
+    assert not_found.json['status_code'] == 404
+    method = client.post('/api/health')
+    assert method.status_code == 405
+    assert method.json['status_code'] == 405

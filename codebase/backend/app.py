@@ -1,8 +1,12 @@
 import os
-from datetime import date
-from flask import Flask, jsonify
+from datetime import date, datetime, timezone
+from pathlib import Path
+import click
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from db import db
+from migrations import MIGRATIONS, run_migrations, current_schema_version
+from database_tools import create_backup, database_path_from_uri, restore_backup, verify_backup
 from phase1_students.routes import students_bp
 from phase1_students.models import Student
 from phase2_attendance.models import Attendance
@@ -11,22 +15,35 @@ from phase3_photo.routes import photo_bp
 from phase4_quality.auth import auth_bp
 from phase4_quality.privacy import privacy_bp
 from phase4_quality.errors import register_error_handlers
+from phase4_quality.models import User, AuthSession, AuditEvent
+from phase4_quality.auth import require_auth
 
 def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
-
     os.makedirs(app.instance_path, exist_ok=True)
     db_path = os.path.join(app.instance_path, 'classroom.db')
 
     app.config.from_mapping(
-        SECRET_KEY='classroom-secret-key-for-practice',
-        SQLALCHEMY_DATABASE_URI=f'sqlite:///{db_path}',
+        SECRET_KEY=os.environ.get('SECRET_KEY'),
+        SQLALCHEMY_DATABASE_URI=os.environ.get('SQLALCHEMY_DATABASE_URI', f'sqlite:///{db_path}'),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        AUTH_SESSION_HOURS=12,
+        AUTH_MAX_FAILED_LOGINS=5,
+        AUTH_LOCKOUT_MINUTES=15,
+        CORS_ORIGINS=['http://127.0.0.1:5173', 'http://localhost:5173'],
+        AUTO_BACKUP_BEFORE_MIGRATION=True,
     )
 
     if test_config:
         app.config.update(test_config)
+
+    if not app.config.get('SECRET_KEY'):
+        if app.config.get('TESTING'):
+            app.config['SECRET_KEY'] = 'test-only-secret-key'
+        else:
+            raise RuntimeError('SECRET_KEY must be set in the environment before starting the application.')
+
+    CORS(app, resources={r"/api/*": {"origins": app.config['CORS_ORIGINS']}})
 
     db.init_app(app)
 
@@ -40,18 +57,70 @@ def create_app(test_config=None):
     # Register Global JSON Error Handlers
     register_error_handlers(app)
 
+    database_uri = app.config['SQLALCHEMY_DATABASE_URI']
+    existing_database = None
+    if database_uri.startswith('sqlite:///') and not database_uri.endswith(':memory:'):
+        candidate = database_path_from_uri(database_uri)
+        if candidate.is_file() and candidate.stat().st_size > 0:
+            existing_database = candidate
+
     with app.app_context():
-        db.create_all()
+        latest_version = MIGRATIONS[-1][0]
+        if existing_database and app.config['AUTO_BACKUP_BEFORE_MIGRATION']:
+            installed_version = current_schema_version(db.engine)
+            if installed_version < latest_version:
+                timestamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+                backup_directory = Path(app.config.get('BACKUP_DIRECTORY') or existing_database.parent / 'backups')
+                backup_path = backup_directory / f'pre-migration-v{installed_version}-{timestamp}.db'
+                create_backup(existing_database, backup_path)
+        run_migrations(db.engine)
+
+    @app.cli.command('db-version')
+    def db_version_command():
+        """Print the current database schema version."""
+        click.echo(str(current_schema_version(db.engine)))
+
+    @app.cli.command('db-backup')
+    @click.option('--destination', required=True, type=click.Path(path_type=Path))
+    def db_backup_command(destination):
+        """Create and verify a new SQLite backup without overwriting files."""
+        source = database_path_from_uri(app.config['SQLALCHEMY_DATABASE_URI'])
+        manifest = create_backup(source, destination)
+        click.echo(f"Verified backup created: {destination} ({manifest['sha256']})")
+
+    @app.cli.command('db-verify-backup')
+    @click.option('--backup', required=True, type=click.Path(path_type=Path))
+    def db_verify_backup_command(backup):
+        """Verify backup hash and SQLite integrity."""
+        if not verify_backup(backup):
+            raise click.ClickException('Backup verification failed.')
+        click.echo('Backup verification passed.')
+
+    @app.cli.command('db-restore')
+    @click.option('--backup', required=True, type=click.Path(path_type=Path))
+    @click.option('--destination', required=True, type=click.Path(path_type=Path))
+    def db_restore_command(backup, destination):
+        """Restore a verified backup into a new database path only."""
+        restored = restore_backup(backup, destination)
+        click.echo(f'Verified database restored to new path: {restored}')
 
     @app.route('/api/health', methods=['GET'])
     def health_check():
-        return jsonify({'status': 'healthy', 'service': 'Classroom Management API'}), 200
+        return jsonify({
+            'status': 'healthy',
+            'service': 'Classroom Management API',
+            'schema_version': current_schema_version(db.engine),
+        }), 200
 
     @app.route('/api/dashboard/stats', methods=['GET'])
+    @require_auth
     def dashboard_stats():
         """Aggregated live dashboard statistics."""
-        total_students = Student.query.filter_by(is_active=True).count()
-        recent_students = Student.query.filter_by(is_active=True).order_by(Student.id.desc()).limit(5).all()
+        student_query = Student.query.filter_by(is_active=True)
+        if request.current_user.role == 'teacher':
+            student_query = student_query.filter_by(class_name=request.current_user.assigned_class)
+        total_students = student_query.count()
+        recent_students = student_query.order_by(Student.id.desc()).limit(5).all()
 
         today_str = date.today().isoformat()
         today_attendances = Attendance.query.filter_by(date=today_str).all()

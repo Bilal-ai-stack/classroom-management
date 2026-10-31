@@ -19,7 +19,6 @@ def client():
 
     with app.test_client() as client:
         with app.app_context():
-            db.create_all()
             s1 = Student(
                 roll_number='R-101',
                 full_name='Aarav Patel',
@@ -36,6 +35,12 @@ def client():
             )
             db.session.add_all([s1, s2])
             db.session.commit()
+        response = client.post('/api/auth/bootstrap', json={
+            'email': 'admin@example.test',
+            'full_name': 'Test Administrator',
+            'password': 'SecureTest123'
+        })
+        client.environ_base['HTTP_AUTHORIZATION'] = f"Bearer {response.json['token']}"
         yield client
 
 def test_detect_faces_missing_file(client):
@@ -51,17 +56,22 @@ def test_detect_faces_unsupported_file(client):
     assert res.status_code == 400
     assert 'Unsupported file type' in res.json['error']
 
-def test_detect_faces_valid_image(client):
-    # Create minimal 1x1 PNG header bytes
-    png_bytes = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x03\x20\x00\x00\x02\x58\x08\x02\x00\x00\x00'
+def test_detect_faces_reports_unavailable_engine(client):
+    # The minimal test environment intentionally has no OpenCV installed.
+    png_header = b'\x89PNG\r\n\x1a\n'
     data = {
-        'photo': (io.BytesIO(png_bytes), 'class_photo.png')
+        'photo': (io.BytesIO(png_header), 'class_photo.png')
     }
     res = client.post('/api/photo/detect-faces', data=data, content_type='multipart/form-data')
-    assert res.status_code == 200
-    assert res.json['success'] is True
-    assert res.json['faces_count'] > 0
-    assert len(res.json['detected_faces']) > 0
+    assert res.status_code == 422
+    assert res.json['success'] is False
+    assert 'OpenCV is not installed' in res.json['error']
+
+def test_detect_faces_rejects_fake_image_with_allowed_extension(client):
+    data = {'photo': (io.BytesIO(b'not really an image'), 'class_photo.png')}
+    res = client.post('/api/photo/detect-faces', data=data, content_type='multipart/form-data')
+    assert res.status_code == 422
+    assert res.json['success'] is False
 
 def test_verify_photo_attendance(client):
     payload = {

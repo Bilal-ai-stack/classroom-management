@@ -74,7 +74,19 @@ export const attendanceApi = {
     if (endDate) params.append('end_date', endDate);
     if (className && className !== 'All Classes') params.append('class_name', className);
     return apiRequest(`/reports/attendance?${params.toString()}`);
-  }
+  },
+  getSession: (date, className, section = 'A') => {
+    const params = new URLSearchParams({ date, class_name: className, section });
+    return apiRequest(`/attendance/session?${params.toString()}`);
+  },
+  finalizeSession: (date, className, section = 'A') => apiRequest('/attendance/session/finalize', {
+    method: 'POST',
+    body: JSON.stringify({ date, class_name: className, section })
+  }),
+  reopenSession: (date, className, reason, section = 'A') => apiRequest('/attendance/session/reopen', {
+    method: 'POST',
+    body: JSON.stringify({ date, class_name: className, section, reason })
+  })
 };
 
 // Phase 3 Photo-Assisted Attendance API endpoints

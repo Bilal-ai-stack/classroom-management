@@ -5,15 +5,19 @@ from db import db
 from phase1_students.models import Student
 from phase2_attendance.models import Attendance
 from phase3_photo.detector import detect_faces_in_image
+from phase4_quality.auth import require_auth
+from phase4_quality.models import record_audit
 
 photo_bp = Blueprint('photo', __name__)
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
+MAX_PHOTO_BYTES = 10 * 1024 * 1024
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @photo_bp.route('/photo/detect-faces', methods=['POST'])
+@require_auth
 def detect_faces():
     """Upload a classroom photo and extract detected face bounding boxes."""
     if 'photo' not in request.files and 'file' not in request.files:
@@ -31,13 +35,17 @@ def detect_faces():
         }), 400
 
     image_bytes = file.read()
+    if not image_bytes:
+        return jsonify({'success': False, 'error': 'The uploaded photo is empty.'}), 400
+    if len(image_bytes) > MAX_PHOTO_BYTES:
+        return jsonify({'success': False, 'error': 'Photo exceeds the 10 MB upload limit.'}), 413
     detection_result = detect_faces_in_image(image_bytes)
 
     if not detection_result.get('success'):
         return jsonify({
             'success': False,
             'error': detection_result.get('error', 'Face detection failed.')
-        }), 500
+        }), 422
 
     return jsonify({
         'success': True,
@@ -52,6 +60,7 @@ def detect_faces():
     }), 200
 
 @photo_bp.route('/photo/verify-attendance', methods=['POST'])
+@require_auth
 def verify_photo_attendance():
     """Teacher confirms student-to-face assignments and commits attendance records."""
     data = request.get_json() or {}
@@ -79,6 +88,9 @@ def verify_photo_attendance():
         if not student:
             errors.append(f"Student ID {student_id} not found.")
             continue
+        if request.current_user.role == 'teacher' and student.class_name != request.current_user.assigned_class:
+            errors.append(f"Student ID {student_id} is outside your assigned class.")
+            continue
 
         existing = Attendance.query.filter_by(student_id=student_id, date=target_date).first()
         if existing:
@@ -96,6 +108,10 @@ def verify_photo_attendance():
 
         committed_count += 1
 
+    if errors:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': 'Photo attendance was not saved.', 'errors': errors}), 400
+    record_audit('attendance.photo_confirm', 'attendance', target_date, {'student_count': committed_count}, request.current_user.id)
     db.session.commit()
 
     return jsonify({
@@ -106,6 +122,7 @@ def verify_photo_attendance():
     }), 200
 
 @photo_bp.route('/photo/cleanup', methods=['DELETE'])
+@require_auth
 def cleanup_session_photos():
     """Purge temporary review photos to preserve privacy."""
     return jsonify({

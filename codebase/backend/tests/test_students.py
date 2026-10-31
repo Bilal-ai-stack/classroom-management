@@ -18,7 +18,6 @@ def client():
 
     with app.test_client() as client:
         with app.app_context():
-            db.create_all()
             # Seed 2 test students
             s1 = Student(
                 roll_number='TEST-01',
@@ -36,6 +35,12 @@ def client():
             )
             db.session.add_all([s1, s2])
             db.session.commit()
+        response = client.post('/api/auth/bootstrap', json={
+            'email': 'admin@example.test',
+            'full_name': 'Test Administrator',
+            'password': 'SecureTest123'
+        })
+        client.environ_base['HTTP_AUTHORIZATION'] = f"Bearer {response.json['token']}"
         yield client
 
 def test_health_check(client):

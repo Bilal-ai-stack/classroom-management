@@ -19,7 +19,6 @@ def client():
 
     with app.test_client() as client:
         with app.app_context():
-            db.create_all()
             # Seed 3 test students
             s1 = Student(
                 roll_number='STU-01',
@@ -44,6 +43,12 @@ def client():
             )
             db.session.add_all([s1, s2, s3])
             db.session.commit()
+        response = client.post('/api/auth/bootstrap', json={
+            'email': 'admin@example.test',
+            'full_name': 'Test Administrator',
+            'password': 'SecureTest123'
+        })
+        client.environ_base['HTTP_AUTHORIZATION'] = f"Bearer {response.json['token']}"
         yield client
 
 def test_get_daily_attendance_initial_unrecorded(client):
@@ -147,3 +152,30 @@ def test_bulk_attendance_validation(client):
     # Empty records
     res2 = client.post('/api/attendance/bulk', json={'date': '2026-10-24', 'records': []})
     assert res2.status_code == 400
+
+    # Invalid dates and statuses are rejected rather than silently changed.
+    res3 = client.post('/api/attendance/bulk', json={
+        'date': '2026-02-30',
+        'records': [{'student_id': 1, 'status': 'Present'}]
+    })
+    assert res3.status_code == 400
+
+    res4 = client.post('/api/attendance/bulk', json={
+        'date': '2026-10-24',
+        'records': [{'student_id': 1, 'status': 'Unknown'}]
+    })
+    assert res4.status_code == 400
+    with client.application.app_context():
+        assert Attendance.query.filter_by(student_id=1, date='2026-10-24').count() == 0
+
+def test_bulk_attendance_is_atomic(client):
+    res = client.post('/api/attendance/bulk', json={
+        'date': '2026-10-24',
+        'records': [
+            {'student_id': 1, 'status': 'Present'},
+            {'student_id': 999, 'status': 'Absent'}
+        ]
+    })
+    assert res.status_code == 400
+    with client.application.app_context():
+        assert Attendance.query.count() == 0

@@ -13,7 +13,7 @@ services:
       - classroom_db_data:/app/instance
     environment:
       - FLASK_ENV=production
-      - SECRET_KEY=classroom-management-secret-production-key
+      - SECRET_KEY=${SECRET_KEY:?Set SECRET_KEY in a local .env file before starting}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
       interval: 30s

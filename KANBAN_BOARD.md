@@ -4,6 +4,20 @@
 **Methodology:** Agile Kanban with Work-In-Progress (WIP) limits  
 **Board URL:** `https://github.com/Bilal-ai-stack/classroom-management/projects`
 
+## Classroom Management System 2.0 — active release-safety lane
+
+The evidence-backed roadmap is maintained in `docs/CODEX_AUDIT.md` and execution results in `docs/CODEX_PROGRESS.md`.
+
+- [x] Audit repository, baseline tests/build, and document architecture decisions.
+- [x] Reject invalid attendance atomically; remove fabricated photo detections.
+- [x] P0: versioned migrations and tested backup/restore gate.
+- [x] P0: persistent authentication, secure bootstrap, RBAC, and route scoping.
+- [x] P0: attendance sessions, finalization/corrections, audit, calendar and policy math.
+- [ ] P0: deterministic, hardened local photo pipeline tests.
+- [ ] P1: configurable institution/admin model and UI.
+- [ ] P2: reporting, portfolios, privacy/retention, accessibility and offline resilience.
+- [ ] P3: verified Windows packaging, upgrade, restore, and uninstall flow.
+
 ---
 
 ## Kanban Board Overview

@@ -1,6 +1,7 @@
 import os
 import glob
 from flask import Blueprint, jsonify, current_app
+from phase4_quality.auth import require_auth, require_roles
 
 privacy_bp = Blueprint('privacy', __name__)
 
@@ -28,6 +29,7 @@ def get_privacy_policy():
     }), 200
 
 @privacy_bp.route('/privacy/purge', methods=['POST'])
+@require_roles('admin')
 def purge_temporary_data():
     """Immediately purge all temporary photo review artifacts."""
     crops_dir = os.path.join(current_app.instance_path, 'temp_crops')
@@ -49,6 +51,7 @@ def purge_temporary_data():
     }), 200
 
 @privacy_bp.route('/privacy/audit', methods=['GET'])
+@require_roles('admin')
 def privacy_audit():
     """Audit local privacy compliance and temporary file footprints."""
     crops_dir = os.path.join(current_app.instance_path, 'temp_crops')

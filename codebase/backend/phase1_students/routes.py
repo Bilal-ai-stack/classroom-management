@@ -1,10 +1,13 @@
 from flask import Blueprint, request, jsonify
 from db import db
 from phase1_students.models import Student
+from phase4_quality.auth import require_auth, require_roles
+from phase4_quality.models import record_audit
 
 students_bp = Blueprint('students', __name__)
 
 @students_bp.route('/students', methods=['GET'])
+@require_auth
 def list_students():
     """List students with search, class filter, and active/archive toggle."""
     query_str = request.args.get('q', '').strip()
@@ -12,6 +15,8 @@ def list_students():
     include_archived = request.args.get('include_archived', 'false').lower() == 'true'
 
     query = Student.query
+    if request.current_user.role == 'teacher':
+        query = query.filter_by(class_name=request.current_user.assigned_class)
     if not include_archived:
         query = query.filter_by(is_active=True)
     if class_name:
@@ -32,6 +37,7 @@ def list_students():
     }), 200
 
 @students_bp.route('/students', methods=['POST'])
+@require_roles('admin')
 def create_student():
     """Create a new student with validation."""
     data = request.get_json() or {}
@@ -72,6 +78,8 @@ def create_student():
     )
 
     db.session.add(student)
+    db.session.flush()
+    record_audit('student.create', 'student', student.id, {'class_name': class_name, 'section': section}, request.current_user.id)
     db.session.commit()
 
     return jsonify({
@@ -81,11 +89,14 @@ def create_student():
     }), 201
 
 @students_bp.route('/students/<int:student_id>', methods=['GET'])
+@require_auth
 def get_student(student_id):
     """Fetch individual student portfolio details."""
     student = db.session.get(Student, student_id)
     if not student:
         return jsonify({'success': False, 'error': 'Student not found.'}), 404
+    if request.current_user.role == 'teacher' and student.class_name != request.current_user.assigned_class:
+        return jsonify({'success': False, 'error': 'You do not have permission to view this student.'}), 403
 
     return jsonify({
         'success': True,
@@ -93,6 +104,7 @@ def get_student(student_id):
     }), 200
 
 @students_bp.route('/students/<int:student_id>', methods=['PUT'])
+@require_roles('admin')
 def update_student(student_id):
     """Update student profile details."""
     student = db.session.get(Student, student_id)
@@ -136,6 +148,7 @@ def update_student(student_id):
     if 'is_active' in data:
         student.is_active = bool(data['is_active'])
 
+    record_audit('student.update', 'student', student.id, {'class_name': class_name, 'section': section}, request.current_user.id)
     db.session.commit()
 
     return jsonify({
@@ -145,6 +158,7 @@ def update_student(student_id):
     }), 200
 
 @students_bp.route('/students/<int:student_id>/archive', methods=['PATCH'])
+@require_roles('admin')
 def archive_student(student_id):
     """Soft archive or restore a student."""
     student = db.session.get(Student, student_id)
@@ -158,6 +172,7 @@ def archive_student(student_id):
     else:
         student.is_active = not student.is_active
 
+    record_audit('student.status_change', 'student', student.id, {'is_active': student.is_active}, request.current_user.id)
     db.session.commit()
     status_text = 'active' if student.is_active else 'archived'
 
@@ -168,10 +183,13 @@ def archive_student(student_id):
     }), 200
 
 @students_bp.route('/classes', methods=['GET'])
+@require_auth
 def list_classes():
     """List all available classes and sections for dropdown filters."""
     records = db.session.query(Student.class_name, Student.section).filter_by(is_active=True).distinct().all()
     classes = sorted(list({f"{r[0]}" for r in records}))
+    if request.current_user.role == 'teacher':
+        classes = [request.current_user.assigned_class] if request.current_user.assigned_class else []
     return jsonify({
         'success': True,
         'classes': classes if classes else ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5']

@@ -83,9 +83,12 @@ cd codebase/backend
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+$env:SECRET_KEY = '<generate-a-long-random-local-secret>'
 python app.py
 ```
 Backend runs on `http://localhost:5000`.
+
+On a new database, create the first administrator once with `POST /api/auth/bootstrap` using a unique email, full name, and a password of at least 12 characters containing letters and numbers. There are no default or shared accounts. See `docs/SECURITY.md`, `docs/DATABASE_MIGRATIONS.md`, and `docs/BACKUP_AND_RESTORE.md` before using real records.
 
 ### Frontend (React / Vite)
 ```powershell

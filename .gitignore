@@ -11,6 +11,8 @@ __pycache__/
 *.sqlite3
 *.db
 .pytest_cache/
+tmp_cache/
+tmp_pytest/
 backend/instance/
 backend/uploads/temp/
 

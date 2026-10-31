@@ -114,14 +114,14 @@ export default function App() {
   // Phase 4 Authentication & Privacy Controls State
   const [teacherProfile, setTeacherProfile] = useState({
     authenticated: false,
-    name: 'Ms. Clara Vance',
-    email: 'teacher@school.edu',
-    role: 'Lead Educator',
-    assigned_class: 'Grade 4-A'
+    name: '',
+    email: '',
+    role: '',
+    assigned_class: ''
   });
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
-  const [authForm, setAuthForm] = useState({ email: 'teacher@school.edu', password: 'classroom2026' });
+  const [authForm, setAuthForm] = useState({ email: '', password: '' });
   const [authError, setAuthError] = useState('');
   const [privacyPolicy, setPrivacyPolicy] = useState(null);
   const [privacyAudit, setPrivacyAudit] = useState(null);
@@ -282,10 +282,10 @@ export default function App() {
     localStorage.removeItem('classroom_token');
     setTeacherProfile({
       authenticated: false,
-      name: 'Ms. Clara Vance',
-      email: 'teacher@school.edu',
-      role: 'Lead Educator',
-      assigned_class: 'Grade 4-A'
+      name: '',
+      email: '',
+      role: '',
+      assigned_class: ''
     });
     showToast('Signed out of ClassroomOS.');
   };
@@ -1834,29 +1834,6 @@ export default function App() {
               <span>{authError}</span>
             </div>
           )}
-
-          {/* Quick Demo Fill Buttons */}
-          <div style={{ marginBottom: '1rem' }}>
-            <label className="form-label" style={{ fontSize: '0.78rem', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
-              Quick Demo Accounts
-            </label>
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => setAuthForm({ email: 'teacher@school.edu', password: 'classroom2026' })}
-              >
-                Lead Teacher (Ms. Vance)
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => setAuthForm({ email: 'admin@school.edu', password: 'admin2026' })}
-              >
-                Principal (Mr. Davis)
-              </button>
-            </div>
-          </div>
 
           <div className="form-group">
             <label className="form-label">Email Address</label>
