@@ -110,6 +110,11 @@ export const photoApi = {
 
 // Phase 4 Teacher Authentication & Session API
 export const authApi = {
+  getStatus: () => apiRequest('/auth/status'),
+  bootstrap: (data) => apiRequest('/auth/bootstrap', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
   login: (email, password) => apiRequest('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ email, password })

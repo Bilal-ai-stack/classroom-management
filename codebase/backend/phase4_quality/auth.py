@@ -83,6 +83,21 @@ def require_roles(*roles):
     return decorator
 
 
+@auth_bp.route('/auth/status', methods=['GET'])
+@auth_bp.route('/auth/bootstrap', methods=['GET'])
+def get_auth_status():
+    """Return whether the system requires initial administrator bootstrap.
+    Safe and public: exposes only a boolean indicating whether any user account exists.
+    """
+    user_count = User.query.count()
+    return jsonify({
+        'success': True,
+        'bootstrap_required': user_count == 0,
+        'has_users': user_count > 0,
+        'user_count': user_count
+    }), 200
+
+
 @auth_bp.route('/auth/bootstrap', methods=['POST'])
 def bootstrap_admin():
     """Create the first administrator exactly once."""

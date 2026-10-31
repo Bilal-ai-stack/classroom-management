@@ -147,3 +147,79 @@ def test_privacy_and_json_error_handlers(client):
     method = client.post('/api/health')
     assert method.status_code == 405
     assert method.json['status_code'] == 405
+
+
+def test_auth_status_endpoint(client):
+    # Before bootstrap: 0 users
+    status_resp = client.get('/api/auth/status')
+    assert status_resp.status_code == 200
+    assert status_resp.json['bootstrap_required'] is True
+    assert status_resp.json['has_users'] is False
+    assert status_resp.json['user_count'] == 0
+    # Safe: no sensitive keys in response
+    assert 'password' not in status_resp.json
+    assert 'token' not in status_resp.json
+
+    # Bootstrap endpoint GET alias
+    alias_resp = client.get('/api/auth/bootstrap')
+    assert alias_resp.status_code == 200
+    assert alias_resp.json['bootstrap_required'] is True
+
+    # Perform bootstrap
+    bootstrap(client)
+
+    # After bootstrap: 1 user
+    status_after = client.get('/api/auth/status')
+    assert status_after.status_code == 200
+    assert status_after.json['bootstrap_required'] is False
+    assert status_after.json['has_users'] is True
+    assert status_after.json['user_count'] == 1
+
+
+def test_admin_cli_recovery(client):
+    admin = bootstrap(client)
+    admin_token = admin.json['token']
+    headers = authorized(admin_token)
+
+    # Verify session is currently active
+    assert client.get('/api/auth/me', headers=headers).status_code == 200
+
+    # Simulate lockout
+    with client.application.app_context():
+        user = User.query.filter_by(email='admin@example.test').first()
+        from datetime import datetime, timedelta, timezone
+        from phase4_quality.models import utcnow, record_audit
+        from werkzeug.security import generate_password_hash, check_password_hash
+        user.failed_login_count = 5
+        user.locked_until = utcnow() + timedelta(minutes=15)
+        db.session.commit()
+
+    # Now verify login is locked out
+    locked_login = client.post('/api/auth/login', json={
+        'email': 'admin@example.test', 'password': 'SecureAdmin123'
+    })
+    assert locked_login.status_code == 429
+
+    # Execute launcher recovery logic
+    with client.application.app_context():
+        target = User.query.filter_by(email='admin@example.test').first()
+        new_password = 'NewSecureAdmin456'
+        target.password_hash = generate_password_hash(new_password, method='scrypt')
+        target.password_changed_at = utcnow()
+        target.failed_login_count = 0
+        target.locked_until = None
+        target.is_active = True
+        AuthSession.query.filter_by(user_id=target.id, revoked_at=None).update({'revoked_at': utcnow()})
+        record_audit('user.admin_cli_recovery', 'user', target.id, {'email': target.email}, actor_user_id=target.id)
+        db.session.commit()
+
+    # Previous session must be revoked
+    assert client.get('/api/auth/me', headers=headers).status_code == 401
+
+    # New login with updated password succeeds and lockout is gone
+    new_login = client.post('/api/auth/login', json={
+        'email': 'admin@example.test', 'password': 'NewSecureAdmin456'
+    })
+    assert new_login.status_code == 200
+    assert new_login.json['teacher']['role'] == 'admin'
+

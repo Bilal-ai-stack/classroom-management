@@ -13,7 +13,9 @@ import {
   LogIn,
   Menu,
   X as CloseIcon,
-  Settings
+  Settings,
+  Sparkles,
+  UserPlus
 } from 'lucide-react';
 
 import SchoolLogo from './SchoolLogo';
@@ -23,6 +25,7 @@ export default function Navbar({
   setActiveTab,
   teacherProfile,
   institution,
+  bootstrapRequired = false,
   onOpenAuthModal,
   onOpenPrivacyModal,
   onLogout
@@ -160,13 +163,33 @@ export default function Navbar({
           ) : (
             <button
               onClick={onOpenAuthModal}
-              className="btn btn-primary btn-sm"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.75rem' }}
-              title="Educator Login"
-              aria-label="Sign in as Teacher"
+              className={`btn ${bootstrapRequired ? 'btn-primary' : 'btn-primary'} btn-sm`}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                padding: '0.4rem 0.85rem',
+                fontWeight: 700,
+                ...(bootstrapRequired ? {
+                  background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)',
+                  boxShadow: '0 0 0 2px rgba(37, 99, 235, 0.25)',
+                  border: '1px solid #3B82F6'
+                } : {})
+              }}
+              title={bootstrapRequired ? "Initial Administrator Setup" : "Educator Login"}
+              aria-label={bootstrapRequired ? "Initial Administrator Setup" : "Sign in as Teacher"}
             >
-              <LogIn size={15} aria-hidden="true" />
-              <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Sign In</span>
+              {bootstrapRequired ? (
+                <>
+                  <Sparkles size={15} aria-hidden="true" />
+                  <span style={{ fontSize: '0.8rem', fontWeight: 700 }}>Setup Administrator</span>
+                </>
+              ) : (
+                <>
+                  <LogIn size={15} aria-hidden="true" />
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Sign In</span>
+                </>
+              )}
             </button>
           )}
 

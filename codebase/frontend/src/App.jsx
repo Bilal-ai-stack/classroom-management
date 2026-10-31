@@ -34,7 +34,8 @@ import {
   Shield,
   Printer,
   Lock,
-  LogIn
+  LogIn,
+  UserPlus
 } from 'lucide-react';
 
 const getTodayDate = () => new Date().toISOString().split('T')[0];
@@ -134,6 +135,14 @@ export default function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
   const [authForm, setAuthForm] = useState({ email: '', password: '' });
+  const [bootstrapRequired, setBootstrapRequired] = useState(false);
+  const [isBootstrapMode, setIsBootstrapMode] = useState(false);
+  const [bootstrapForm, setBootstrapForm] = useState({
+    full_name: '',
+    email: '',
+    password: '',
+    confirm_password: ''
+  });
   const [authError, setAuthError] = useState('');
   const [privacyPolicy, setPrivacyPolicy] = useState(null);
   const [privacyAudit, setPrivacyAudit] = useState(null);
@@ -247,6 +256,21 @@ export default function App() {
     }
   }, []);
 
+  const checkAuthStatus = useCallback(async () => {
+    try {
+      const res = await authApi.getStatus();
+      if (res && res.success) {
+        const required = Boolean(res.bootstrap_required);
+        setBootstrapRequired(required);
+        if (required) {
+          setIsBootstrapMode(true);
+        }
+      }
+    } catch {
+      // offline fallback
+    }
+  }, []);
+
   const loadInstitutionProfile = useCallback(async () => {
     try {
       const res = await adminApi.getPublicProfile();
@@ -259,11 +283,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    checkAuthStatus();
     loadInstitutionProfile();
     loadDashboardStats();
     loadClasses();
     loadTeacherProfile();
-  }, [loadInstitutionProfile, loadDashboardStats, loadClasses, loadTeacherProfile]);
+  }, [checkAuthStatus, loadInstitutionProfile, loadDashboardStats, loadClasses, loadTeacherProfile]);
 
   useEffect(() => {
     loadStudents();
@@ -280,6 +305,42 @@ export default function App() {
       loadReports();
     }
   }, [activeTab, loadReports]);
+
+  const handleBootstrap = async (e) => {
+    e.preventDefault();
+    setAuthError('');
+    if (bootstrapForm.password !== bootstrapForm.confirm_password) {
+      setAuthError('Passwords do not match.');
+      return;
+    }
+    if (bootstrapForm.password.length < 12) {
+      setAuthError('Password must contain at least 12 characters.');
+      return;
+    }
+    try {
+      const res = await authApi.bootstrap({
+        full_name: bootstrapForm.full_name,
+        email: bootstrapForm.email,
+        password: bootstrapForm.password
+      });
+      if (res && res.success) {
+        if (res.token) {
+          localStorage.setItem('classroom_token', res.token);
+        }
+        if (res.teacher) {
+          setTeacherProfile({ ...res.teacher, authenticated: true });
+        }
+        setBootstrapRequired(false);
+        setIsBootstrapMode(false);
+        setIsAuthModalOpen(false);
+        showToast(res.message || 'Administrator account created successfully! Welcome to ClassroomOS.');
+        loadTeacherProfile();
+        loadInstitutionProfile();
+      }
+    } catch (err) {
+      setAuthError(err.message || 'Administrator setup failed.');
+    }
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -612,7 +673,14 @@ export default function App() {
         setActiveTab={setActiveTab}
         teacherProfile={teacherProfile}
         institution={institution}
-        onOpenAuthModal={() => { setIsAuthModalOpen(true); setAuthError(''); }}
+        bootstrapRequired={bootstrapRequired}
+        onOpenAuthModal={() => {
+          setIsAuthModalOpen(true);
+          setAuthError('');
+          if (bootstrapRequired) {
+            setIsBootstrapMode(true);
+          }
+        }}
         onOpenPrivacyModal={() => { setIsPrivacyModalOpen(true); loadPrivacyDetails(); }}
         onLogout={handleLogout}
       />
@@ -628,6 +696,63 @@ export default function App() {
         {/* DASHBOARD TAB */}
         {activeTab === 'dashboard' && (
           <div>
+            {/* First-Run Administrator Bootstrap Banner */}
+            {bootstrapRequired && (
+              <div className="glass-card" style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '1.25rem',
+                padding: '1.2rem 1.5rem',
+                borderRadius: 'var(--radius-lg)',
+                marginBottom: '1.75rem',
+                background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.12) 0%, rgba(14, 165, 233, 0.08) 100%)',
+                border: '1.5px solid rgba(37, 99, 235, 0.35)',
+                boxShadow: '0 4px 14px rgba(37, 99, 235, 0.08)',
+                flexWrap: 'wrap'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                  <div style={{
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: '12px',
+                    background: 'var(--primary)',
+                    color: '#fff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 2px 8px rgba(37, 99, 235, 0.3)'
+                  }}>
+                    <Sparkles size={22} />
+                  </div>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                        First-Run Initial Setup Required
+                      </h3>
+                      <span className="badge badge-primary" style={{ fontSize: '0.72rem', padding: '0.15rem 0.5rem' }}>
+                        Action Required
+                      </span>
+                    </div>
+                    <p style={{ margin: '0.25rem 0 0', fontSize: '0.86rem', color: 'var(--text-muted)' }}>
+                      No administrator account exists yet. Create your primary administrator to configure school settings, manage classes, and enroll students.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setIsBootstrapMode(true);
+                    setIsAuthModalOpen(true);
+                    setAuthError('');
+                  }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', fontWeight: 700, padding: '0.55rem 1.1rem' }}
+                >
+                  <UserPlus size={16} /> Create Administrator
+                </button>
+              </div>
+            )}
+
             {/* Institutional Profile Banner */}
             <div className="institution-welcome-banner glass-card" style={{
               display: 'flex',
@@ -1975,78 +2100,220 @@ export default function App() {
         </form>
       </Modal>
 
-      {/* PHASE 4: TEACHER AUTHENTICATION MODAL */}
+      {/* PHASE 4: TEACHER AUTHENTICATION & BOOTSTRAP MODAL */}
       <Modal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
-        title="Educator Sign-In"
+        title={isBootstrapMode ? "Initial Administrator Setup" : "Educator Sign-In"}
       >
-        <form onSubmit={handleLogin}>
-          <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
-            <SchoolLogo
-              logoUrl={institution.logo_url}
-              institutionName={institution.institution_name}
-              size={56}
-              showBorder={true}
-              rounded="lg"
-            />
-            <h3 style={{ fontSize: '1.15rem', fontWeight: 800, marginTop: '0.6rem', marginBottom: '0.2rem', color: 'var(--text-main)' }}>
-              {institution.institution_name}
-            </h3>
-            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0 }}>
-              Academic Year {institution.academic_year} • Classroom OS Portal
-            </p>
-          </div>
+        <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+          <SchoolLogo
+            logoUrl={institution.logo_url}
+            institutionName={institution.institution_name}
+            size={56}
+            showBorder={true}
+            rounded="lg"
+          />
+          <h3 style={{ fontSize: '1.15rem', fontWeight: 800, marginTop: '0.6rem', marginBottom: '0.2rem', color: 'var(--text-main)' }}>
+            {institution.institution_name}
+          </h3>
+          <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0 }}>
+            Academic Year {institution.academic_year} • Classroom OS Portal
+          </p>
+        </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem', padding: '0.75rem', background: 'var(--primary-light)', borderRadius: '10px' }}>
-            <Lock size={24} color="var(--primary)" />
-            <div style={{ fontSize: '0.88rem', color: 'var(--text-main)' }}>
-              Sign in to authenticate as a lead educator or school administrator.
+        {isBootstrapMode ? (
+          <form onSubmit={handleBootstrap}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              marginBottom: '1.25rem',
+              padding: '0.75rem 1rem',
+              background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.1) 0%, rgba(14, 165, 233, 0.06) 100%)',
+              border: '1px solid rgba(37, 99, 235, 0.25)',
+              borderRadius: '10px'
+            }}>
+              <Sparkles size={22} color="var(--primary)" />
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>
+                <strong>Initial Setup:</strong> Create the root administrator account to initialize and secure this ClassroomOS installation.
+              </div>
             </div>
-          </div>
 
-          {authError && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', background: '#FEE2E2', border: '1px solid #FCA5A5', borderRadius: '8px', color: '#991B1B', marginBottom: '1rem', fontSize: '0.88rem' }}>
-              <AlertCircle size={18} />
-              <span>{authError}</span>
+            {authError && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', background: '#FEE2E2', border: '1px solid #FCA5A5', borderRadius: '8px', color: '#991B1B', marginBottom: '1rem', fontSize: '0.88rem' }}>
+                <AlertCircle size={18} />
+                <span>{authError}</span>
+              </div>
+            )}
+
+            <div className="form-group">
+              <label className="form-label">Full Name</label>
+              <input
+                type="text"
+                className="form-input"
+                required
+                placeholder="e.g., Principal Jane Doe"
+                value={bootstrapForm.full_name}
+                onChange={(e) => setBootstrapForm({ ...bootstrapForm, full_name: e.target.value })}
+              />
             </div>
-          )}
 
-          <div className="form-group">
-            <label className="form-label">Email Address</label>
-            <input
-              type="email"
-              className="form-input"
-              required
-              value={authForm.email}
-              onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })}
-            />
-          </div>
+            <div className="form-group">
+              <label className="form-label">Administrator Email Address</label>
+              <input
+                type="email"
+                className="form-input"
+                required
+                placeholder="admin@springfieldacademy.edu"
+                value={bootstrapForm.email}
+                onChange={(e) => setBootstrapForm({ ...bootstrapForm, email: e.target.value })}
+              />
+            </div>
 
-          <div className="form-group">
-            <label className="form-label">Password</label>
-            <input
-              type="password"
-              className="form-input"
-              required
-              value={authForm.password}
-              onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
-            />
-          </div>
+            <div className="form-group">
+              <label className="form-label">Administrator Password</label>
+              <input
+                type="password"
+                className="form-input"
+                required
+                minLength={12}
+                placeholder="At least 12 characters (letters & numbers)"
+                value={bootstrapForm.password}
+                onChange={(e) => setBootstrapForm({ ...bootstrapForm, password: e.target.value })}
+              />
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem', display: 'block' }}>
+                Must be at least 12 characters and include both letters and numbers.
+              </span>
+            </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.25rem' }}>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => setIsAuthModalOpen(false)}
-            >
-              Cancel
-            </button>
-            <button type="submit" className="btn btn-primary">
-              <LogIn size={16} /> Sign In
-            </button>
-          </div>
-        </form>
+            <div className="form-group">
+              <label className="form-label">Confirm Password</label>
+              <input
+                type="password"
+                className="form-input"
+                required
+                minLength={12}
+                placeholder="Re-enter administrator password"
+                value={bootstrapForm.confirm_password}
+                onChange={(e) => setBootstrapForm({ ...bootstrapForm, confirm_password: e.target.value })}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div>
+                {!bootstrapRequired && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => { setIsBootstrapMode(false); setAuthError(''); }}
+                  >
+                    Switch to Sign-In
+                  </button>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setIsAuthModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" style={{ fontWeight: 700 }}>
+                  <UserPlus size={16} /> Create Administrator & Launch
+                </button>
+              </div>
+            </div>
+          </form>
+        ) : (
+          <form onSubmit={handleLogin}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem', padding: '0.75rem', background: 'var(--primary-light)', borderRadius: '10px' }}>
+              <Lock size={24} color="var(--primary)" />
+              <div style={{ fontSize: '0.88rem', color: 'var(--text-main)' }}>
+                Sign in to authenticate as a lead educator or school administrator.
+              </div>
+            </div>
+
+            {authError && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', background: '#FEE2E2', border: '1px solid #FCA5A5', borderRadius: '8px', color: '#991B1B', marginBottom: '1rem', fontSize: '0.88rem' }}>
+                <AlertCircle size={18} />
+                <span>{authError}</span>
+              </div>
+            )}
+
+            <div className="form-group">
+              <label className="form-label">Email Address</label>
+              <input
+                type="email"
+                className="form-input"
+                required
+                value={authForm.email}
+                onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })}
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Password</label>
+              <input
+                type="password"
+                className="form-input"
+                required
+                value={authForm.password}
+                onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div>
+                {bootstrapRequired && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => { setIsBootstrapMode(true); setAuthError(''); }}
+                    style={{ color: 'var(--primary)', fontWeight: 600 }}
+                  >
+                    <Sparkles size={14} style={{ marginRight: '0.3rem' }} />
+                    First Run? Create Administrator
+                  </button>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setIsAuthModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  <LogIn size={16} /> Sign In
+                </button>
+              </div>
+            </div>
+
+            {/* Account Recovery Guidance */}
+            <div style={{
+              marginTop: '1.5rem',
+              padding: '0.75rem 0.9rem',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border)',
+              borderRadius: '8px',
+              fontSize: '0.76rem',
+              color: 'var(--text-muted)',
+              lineHeight: 1.45
+            }}>
+              <div style={{ fontWeight: 600, color: 'var(--text-main)', marginBottom: '0.2rem' }}>
+                Administrator Account Recovery
+              </div>
+              Lost credentials or locked out? ClassroomOS supports secure administrative password recovery via the desktop launcher CLI without modifying student data:
+              <code style={{ display: 'block', margin: '0.35rem 0', padding: '0.25rem 0.45rem', background: 'rgba(0,0,0,0.05)', borderRadius: '4px', fontFamily: 'monospace', color: 'var(--primary)' }}>
+                ClassroomOS.exe --reset-admin &lt;email&gt;
+              </code>
+              All student profiles, attendance histories, and records remain intact.
+            </div>
+          </form>
+        )}
       </Modal>
 
       {/* PHASE 4: PRIVACY & DATA ETHICS CONTROLS MODAL */}
