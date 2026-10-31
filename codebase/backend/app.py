@@ -2,7 +2,7 @@ import os
 from datetime import date, datetime, timezone
 from pathlib import Path
 import click
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from db import db
 from migrations import MIGRATIONS, run_migrations, current_schema_version
@@ -22,19 +22,32 @@ from phase4_quality.auth import require_auth
 
 def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
-    os.makedirs(app.instance_path, exist_ok=True)
-    db_path = os.path.join(app.instance_path, 'classroom.db')
 
-    app.config.from_mapping(
-        SECRET_KEY=os.environ.get('SECRET_KEY'),
-        SQLALCHEMY_DATABASE_URI=os.environ.get('SQLALCHEMY_DATABASE_URI', f'sqlite:///{db_path}'),
-        SQLALCHEMY_TRACK_MODIFICATIONS=False,
-        AUTH_SESSION_HOURS=12,
-        AUTH_MAX_FAILED_LOGINS=5,
-        AUTH_LOCKOUT_MINUTES=15,
-        CORS_ORIGINS=['http://127.0.0.1:5173', 'http://localhost:5173'],
-        AUTO_BACKUP_BEFORE_MIGRATION=True,
-    )
+    local_app_data = os.environ.get('LOCALAPPDATA')
+    if os.environ.get('CLASSROOM_DESKTOP') and local_app_data:
+        data_dir = os.path.join(local_app_data, 'ClassroomOS', 'data')
+        os.makedirs(data_dir, exist_ok=True)
+        db_path = os.path.join(data_dir, 'classroom.db')
+        backup_dir = os.path.join(local_app_data, 'ClassroomOS', 'backups')
+    else:
+        os.makedirs(app.instance_path, exist_ok=True)
+        db_path = os.path.join(app.instance_path, 'classroom.db')
+        backup_dir = os.path.join(app.instance_path, 'backups')
+
+    default_config = {
+        'SECRET_KEY': os.environ.get('SECRET_KEY'),
+        'SQLALCHEMY_DATABASE_URI': os.environ.get('SQLALCHEMY_DATABASE_URI', f'sqlite:///{db_path}'),
+        'SQLALCHEMY_TRACK_MODIFICATIONS': False,
+        'AUTH_SESSION_HOURS': 12,
+        'AUTH_MAX_FAILED_LOGINS': 5,
+        'AUTH_LOCKOUT_MINUTES': 15,
+        'CORS_ORIGINS': ['http://127.0.0.1:5173', 'http://localhost:5173'],
+        'AUTO_BACKUP_BEFORE_MIGRATION': True,
+    }
+    if os.environ.get('CLASSROOM_DESKTOP'):
+        default_config['BACKUP_DIRECTORY'] = Path(backup_dir)
+
+    app.config.from_mapping(default_config)
 
     if test_config:
         app.config.update(test_config)
@@ -59,6 +72,24 @@ def create_app(test_config=None):
 
     # Register Global JSON Error Handlers
     register_error_handlers(app)
+
+    # Serve built SPA frontend when dist exists
+    frontend_dist = os.environ.get('FRONTEND_DIST_PATH')
+    if not frontend_dist and not app.config.get('TESTING'):
+        candidate = Path(__file__).resolve().parent.parent / 'frontend' / 'dist'
+        if candidate.is_dir():
+            frontend_dist = str(candidate)
+
+    if frontend_dist and os.path.isdir(frontend_dist):
+        @app.route('/', defaults={'path': ''})
+        @app.route('/<path:path>')
+        def serve_spa(path):
+            if path and path.startswith('api/'):
+                return jsonify({'error': 'Not Found'}), 404
+            full_path = os.path.join(frontend_dist, path)
+            if path and os.path.isfile(full_path):
+                return send_from_directory(frontend_dist, path)
+            return send_from_directory(frontend_dist, 'index.html')
 
     database_uri = app.config['SQLALCHEMY_DATABASE_URI']
     existing_database = None

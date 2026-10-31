@@ -12,7 +12,7 @@
 | Photo pipeline hardening | Implemented and tested | fail-closed detection, Pillow verification, 25MP decompression bomb limit, 6000px bounds, teacher scoping — 62 tests pass |
 | Configurable institution / admin foundation | Implemented and tested | schema v4 migrations, institution profile, classes/sections, staff accounts, audit log viewer, modular AdminSettings UI — 72 tests pass |
 | Reporting, portfolios, privacy/resilience | Implemented and tested | RFC 4180 CSV export stream, Print/PDF export styles, privacy audit/purge, teacher scoping — 76 tests pass |
-| Windows release | In progress / Next up | native launcher/wrapper & packaging flow |
+| Windows release & desktop packaging | Implemented and tested | launcher.py port supervisor, run-desktop.bat, LocalAppData storage isolation, Inno Setup installer script — 80 tests pass |
 
 ## Implemented in this batch (2026-10-31)
 
@@ -76,7 +76,7 @@ New `test_attendance_sessions.py` (22 tests) covers:
 ```powershell
 cd codebase/backend
 .\venv\Scripts\python.exe -m pytest -v
-# Result: 76 passed in ~28s
+# Result: 80 passed in ~26s
 ```
 
 ## Next acceptance batch
@@ -89,7 +89,7 @@ cd codebase/backend
 - [x] Photo pipeline hardening and deterministic local-engine tests (fake/oversized/no-face/multi-face fixtures).
 - [x] Configurable institution/admin model and UI.
 - [x] Reporting, portfolios, privacy/retention, accessibility and offline resilience.
-- [ ] Verified Windows packaging, upgrade, restore, and uninstall flow.
+- [x] Verified Windows packaging, upgrade, restore, and uninstall flow.
 
 ## Blockers and risks
 

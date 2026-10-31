@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Modal from '../shared/Modal';
-import { adminApi, studentApi } from '../shared/api';
+import { adminApi } from '../shared/api';
 import {
   Building2,
   Layers,
@@ -14,11 +14,7 @@ import {
   UserCheck,
   UserX,
   KeyRound,
-  History,
-  CheckCircle2,
-  AlertCircle,
-  Calendar,
-  Sparkles
+  History
 } from 'lucide-react';
 
 export default function AdminSettings({ teacherProfile, onShowToast }) {
