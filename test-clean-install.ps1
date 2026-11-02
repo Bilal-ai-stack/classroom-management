@@ -1,13 +1,14 @@
-# Independent Clean Install & Lifecycle Verification Test for ClassroomOS 2.0
+# Independent Clean Install & Lifecycle Verification Test for ClassroomOS 2.1
 $ErrorActionPreference = "Stop"
 
 $installDir = "$env:TEMP\ClassroomOS_TestInstall"
 $testAppData = "$env:TEMP\ClassroomOS_TestAppData"
 $testPort = 5088
 $baseUrl = "http://127.0.0.1:$testPort"
+$version = "2.1.0"
 
 Write-Host "=========================================================="
-Write-Host "  ClassroomOS Clean-Install Lifecycle Verification"
+Write-Host "  ClassroomOS Clean-Install Lifecycle Verification (v$version)"
 Write-Host "=========================================================="
 
 # Ensure clean test AppData directory
@@ -15,8 +16,12 @@ if (Test-Path $testAppData) { Remove-Item -Path $testAppData -Recurse -Force }
 New-Item -ItemType Directory -Path $testAppData -Force | Out-Null
 
 if (-not (Test-Path "$installDir\ClassroomOS.exe")) {
-    Write-Host "Installing ClassroomOS silently to $installDir..."
-    $proc = Start-Process -FilePath "dist_installer\ClassroomOS-Setup-2.0.0.exe" -ArgumentList "/DIR=`"$installDir`"", "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait -PassThru
+    $installerExe = "dist_installer\ClassroomOS-Setup-$version.exe"
+    if (-not (Test-Path $installerExe)) {
+        $installerExe = (Get-ChildItem -Path "dist_installer\ClassroomOS-Setup-*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+    }
+    Write-Host "Installing ClassroomOS silently to $installDir using $installerExe..."
+    $proc = Start-Process -FilePath $installerExe -ArgumentList "/DIR=`"$installDir`"", "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait -PassThru
     if ($proc.ExitCode -ne 0) { throw "Installer failed with code $($proc.ExitCode)" }
 }
 

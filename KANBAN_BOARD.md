@@ -4,18 +4,24 @@
 **Methodology:** Agile Kanban with Work-In-Progress (WIP) limits  
 **Board URL:** `https://github.com/Bilal-ai-stack/classroom-management/projects`
 
-## Classroom Management System 2.0 — active release-safety lane
+## Classroom Management System 2.1 — Active Release Lane
 
 The evidence-backed roadmap is maintained in `docs/CODEX_AUDIT.md` and execution results in `docs/CODEX_PROGRESS.md`.
 
 - [x] Audit repository, baseline tests/build, and document architecture decisions.
 - [x] Reject invalid attendance atomically; remove fabricated photo detections.
-- [x] P0: versioned migrations (v1-v5) and tested backup/restore gate.
+- [x] P0: versioned migrations (v1-v6) and tested backup/restore gate.
 - [x] P0: persistent authentication, secure bootstrap, RBAC, and route scoping.
 - [x] P0: deterministic, hardened local photo pipeline tests.
 - [x] P1: configurable institution/admin model, branding logo upload/sanitization, and UI.
 - [x] P2: reporting, portfolios, privacy/retention, mobile responsiveness (320px-1920px), accessibility and offline resilience.
 - [x] P3: verified Windows packaging (portable zip, Inno Setup), upgrade, restore, and uninstall flow.
+- [x] P0: Complete Admin Panel Editability (profile, terms, classes/sections rename sync, staff edit & password reset).
+- [x] P1: UI/UX Professional Redesign (institutional light theme `#1E3A8A`, system typography, zero external CDN fonts).
+- [x] P1: Database Storage Metrics, Backups & Point-in-Time Safe Restoration with pre-restore safety snapshot.
+- [x] P1: Guardian WhatsApp Notification Module (consent, manual deep-link preview modal, automated Cloud API sandbox).
+- [x] P2: Mobile & PWA Offline Readiness (`manifest.webmanifest`, `sw.js`, offline indicator banner).
+- [x] P3: Community Packaging & Product Landing Website (`virtualgoal.com/classroomos`).
 
 ---
 
@@ -26,10 +32,13 @@ The evidence-backed roadmap is maintained in `docs/CODEX_AUDIT.md` and execution
 │   📋 Backlog    │ 🎯 Ready (To Do)│ 🚧 In Progress  │ 👀 In Review/PR │     ✅ Done     │
 │                 │   (WIP Max: 3)  │   (WIP Max: 2)  │   (WIP Max: 2)  │                 │
 ├─────────────────┼─────────────────┼─────────────────┼─────────────────┼─────────────────┤
-│                 │                 │                 │                 │ • Issues #2-#11 │
-│                 │                 │                 │                 │ • Issue #12     │
-│                 │                 │                 │                 │ • Issue #13     │
-│                 │                 │                 │                 │ • Issue #14     │
+│                 │                 │                 │                 │ • Issues #2-#14 │
+│                 │                 │                 │                 │ • Issue #15     │
+│                 │                 │                 │                 │ • Issue #16     │
+│                 │                 │                 │                 │ • Issue #17     │
+│                 │                 │                 │                 │ • Issue #18     │
+│                 │                 │                 │                 │ • Issue #19     │
+│                 │                 │                 │                 │ • Issue #20     │
 └─────────────────┴─────────────────┴─────────────────┴─────────────────┴─────────────────┘
 ```
 
@@ -39,7 +48,7 @@ The evidence-backed roadmap is maintained in `docs/CODEX_AUDIT.md` and execution
 
 ### 1. 📋 Backlog (Future Work)
 - **Policy:** Contains scoped issues not yet scheduled for immediate development.
-- **Current Cards:** All primary roadmap epics have been completed!
+- **Current Cards:** All primary roadmap epics for v2.1.0 completed!
 
 ### 2. 🎯 Ready / To Do (WIP Limit: 3)
 - **Policy:** Clear acceptance criteria defined, dependencies resolved, ready for immediate assignment.
@@ -55,11 +64,11 @@ The evidence-backed roadmap is maintained in `docs/CODEX_AUDIT.md` and execution
   - [x] Linting & automated CI pass
   - [x] No biometric recognition code introduced (ethical policy)
   - [x] Tested on Windows / PowerShell
-  - [x] Docker containerization & Docker Hub workflow configured
+  - [x] 100% Offline verification (zero external CDN or cloud dependencies)
 
 ### 5. ✅ Done
-- **Policy:** PR reviewed, approved, merged into `develop` and `main`, acceptance criteria verified.
-- **Current Cards on GitHub:**
+- **Policy:** PR reviewed, approved, merged, acceptance criteria verified.
+- **Cards on GitHub:**
   - [x] `[#2]` [Epic] Backend Foundation & Student CRUD API *(Phase 1 / Milestone 1)*
   - [x] `[#3]` [Epic] React + Vite Frontend Scaffolding & Light UI Design System *(Phase 1 / Milestone 1)*
   - [x] `[#4]` [Feature] Student Management & Portfolio View *(Phase 1 / Milestone 1)*
@@ -73,27 +82,9 @@ The evidence-backed roadmap is maintained in `docs/CODEX_AUDIT.md` and execution
   - [x] `[#12]` [Feature] Editable School Logo & Institutional Branding *(Phase 4 / Release Execution)*
   - [x] `[#13]` [Feature] Universal Mobile Responsiveness (320px–1920px) & Touch Attendance UI *(Phase 4 / Release Execution)*
   - [x] `[#14]` [DevOps & Packaging] Windows Desktop Portable Build & Inno Setup Release *(Phase 4 / Release Execution)*
-
----
-
-## Customizing the GitHub Kanban Board
-
-### Step 1: Open Your Board
-1. Go to your repository: [Bilal-ai-stack/classroom-management](https://github.com/Bilal-ai-stack/classroom-management)
-2. Click the **Projects** tab at the top (or open your existing Project board).
-
-### Step 2: Configure Kanban Columns (Status Field)
-1. In your project board, click the dropdown next to the view name (e.g. **Board**) or click the column header options.
-2. Under the **Status** field settings (click the small down arrow next to Status column headers or click **Settings**):
-   - Rename / arrange columns as:
-     - `📋 Backlog`
-     - `🎯 Ready`
-     - `🚧 In Progress`
-     - `👀 In Review`
-     - `✅ Done`
-
-### Step 3: Populate the Board with the Developed Issues
-1. Click **+ Add item** at the bottom of the `✅ Done` column (or press `Ctrl+Space` / click **+ Add item**).
-2. Type `#` and select repository `Bilal-ai-stack/classroom-management`.
-3. Select all closed issues (`#2` through `#11`) or click each one to add them to `✅ Done`.
-4. All 10 issues will appear as cards with their respective Milestones and color-coded Phase labels!
+  - [x] `[#15]` [Epic] Complete Admin Settings Panel Editability & State Management *(v2.1.0)*
+  - [x] `[#16]` [Design] Professional UI/UX Light Theme & System Typography Redesign *(v2.1.0)*
+  - [x] `[#17]` [Feature] Database Storage Panel, Verified Backups & Safe Pre-Restore Snapshots *(v2.1.0)*
+  - [x] `[#18]` [Feature] Guardian WhatsApp Notification Module (Consent, Manual wa.me Preview, Cloud API Sandbox) *(v2.1.0)*
+  - [x] `[#19]` [PWA & Offline] Service Worker Cache & Real-Time Offline Banner *(v2.1.0)*
+  - [x] `[#20]` [Release] Packaging Pipeline (Setup Exe, Portable Zip, SHA256SUMS, Product Landing Page) *(v2.1.0)*

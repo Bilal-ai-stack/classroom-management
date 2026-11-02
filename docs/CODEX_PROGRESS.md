@@ -1,62 +1,68 @@
-# Codex Progress — Classroom Management System 2.0
+# Codex Progress — Classroom Management System 2.1
 
-## Milestone status (2026-10-31)
+## Milestone status (2026-11-01)
 
 | Milestone | Status | Evidence |
 |---|---|---|
-| Audit and baseline | Completed | `CODEX_AUDIT.md`; commands below |
+| Audit and baseline | Completed | `CODEX_AUDIT.md`; initial audits |
 | Data-integrity safety batch | Implemented and tested | atomic attendance validation and photo fail-closed changes |
-| Database reliability | Implemented and tested | schema v5 migrations, SQLite safety settings, verified backup/restore |
+| Database reliability & migrations | Implemented and tested | schema v6 migrations, SQLite safety settings, verified backup/restore |
 | Secure authentication/RBAC | Implemented and tested | persistent users/sessions, scrypt/pbkdf2, 15m lockout, class scope, admin reset and audit |
-| Attendance sessions, finalization, corrections | Implemented and tested | sessions, finalize/reopen/reason, correction audit, Excused/Unverified policy math, snapshot — 52 tests pass |
-| Photo pipeline hardening | Implemented and tested | fail-closed detection, Pillow verification, 25MP decompression bomb limit, 6000px bounds, teacher scoping — 62 tests pass |
-| Configurable institution / admin foundation | Implemented and tested | schema v4 migrations, institution profile, classes/sections, staff accounts, audit log viewer, modular AdminSettings UI — 72 tests pass |
-| Reporting, portfolios, privacy/resilience | Implemented and tested | RFC 4180 CSV export stream, Print/PDF export styles, privacy audit/purge, teacher scoping — 76 tests pass |
-| Windows release & desktop packaging | Implemented and tested | launcher.py port supervisor, run-desktop.bat, LocalAppData storage isolation, Inno Setup installer script — 80 tests pass |
-| Editable Branding & School Logo | Implemented and tested | schema v5 migration, SVG/raster upload, XML security sanitizer, default crest, UI integration across app — 87 tests pass |
-| Universal Mobile Responsiveness | Implemented and tested | 320px–1920px layouts, 44px touch targets, single-hand attendance, mobile camera integration, zero horizontal overflow |
-| Production Release Verification | Completed | Portable ZIP package (`dist_release/`), SHA256SUMS.txt, comprehensive documentation, READY FOR RELEASE |
+| Attendance sessions, finalization, corrections | Implemented and tested | sessions, finalize/reopen/reason, correction audit, Excused/Unverified policy math, snapshot |
+| Photo pipeline hardening | Implemented and tested | fail-closed detection, Pillow verification, 25MP decompression bomb limit, 6000px bounds, teacher scoping |
+| Configurable institution / admin foundation | Implemented and tested | schema v4 migrations, institution profile, classes/sections, staff accounts, audit log viewer |
+| Reporting, portfolios, privacy/resilience | Implemented and tested | RFC 4180 CSV export stream, Print/PDF export styles, privacy audit/purge, teacher scoping |
+| Windows release & desktop packaging | Implemented and tested | launcher.py port supervisor, run-desktop.bat, LocalAppData storage isolation, Inno Setup installer script |
+| Editable Branding & School Logo | Implemented and tested | schema v5 migration, SVG/raster upload, XML security sanitizer, default crest, UI integration across app |
+| Universal Mobile Responsiveness | Implemented and tested | 320px–1920px layouts, 44px touch targets, single-hand attendance, zero horizontal overflow |
+| Complete Admin Panel Editability | Implemented and tested | Institution Profile editing (inc. description), Academic Terms CRUD, Class/Section rename with sync, Staff edit & password reset |
+| UI/UX Professional Redesign | Implemented and tested | Institutional deep navy (`#1E3A8A`), slate neutrals, system font stack, high-contrast accessible styling |
+| 100% Offline-First Architecture | Implemented and tested | Zero external font/CDN calls, local Haar Cascade face detection, standalone PyInstaller desktop runtime |
+| Storage Panel, Backups & Restoration | Implemented and tested | Database file size, backup storage volume, disk free space metrics, on-demand backups with SHA-256 manifests, point-in-time restore with automated safety snapshots |
+| Guardian WhatsApp Notification Module | Implemented and tested | Guardian profile fields, international E.164 phone validation, consent tracking, manual preview dispatch modal with attendance templates, automated Cloud API config & simulation sandbox |
+| Mobile & PWA Offline Readiness | Implemented and tested | `manifest.webmanifest`, `sw.js` cache-first service worker, network-only API routing, real-time offline status banner |
+| Community Distribution & Packaging | Implemented and tested | PyInstaller native Windows standalone exe, Inno Setup installer (`ClassroomOS-Setup-2.1.0.exe`), portable ZIP (`ClassroomOS-v2.1.0-Portable-Windows.zip`), SHA256SUMS.txt, product landing website (`virtualgoal.com/classroomos`) |
+| Production Release Verification (v2.1.0) | Completed | 97/97 backend tests pass (39.81s), 6/6 Playwright viewports pass, 0 lint errors, clean installer verified |
 
 ---
 
-## Final Release Execution Batch (2026-10-31)
+## Release Execution Batch — v2.1.0 (2026-11-01)
 
-### Migration 5 — Institution Branding & Logo Metadata
-- Added `logo_path` and `logo_updated_at` columns to `institution_settings` table.
-- Added automatic rollback and idempotent column existence check.
-- Updated schema version to 5; `test_database_reliability.py` asserts `current_schema_version == 5`.
+### Migration 6 — Institution Enhancements, Academic Terms & Guardian WhatsApp
+- **`institution_settings`:** Added `description`, `whatsapp_enabled`, `whatsapp_phone_number_id`, `whatsapp_access_token`, `whatsapp_template_absent`, `whatsapp_template_late`.
+- **`students`:** Added `guardian_name`, `guardian_relationship`, `whatsapp_number`, `whatsapp_consent`, `whatsapp_consent_date`, `whatsapp_opt_out`, `notification_preferences`.
+- **`whatsapp_notifications`:** Added tracking table for dispatches, status, and audit records.
+- Incremented schema version to 6; `test_database_reliability.py` asserts `current_schema_version == 6`.
 
-### Institution Branding & Security Sanitization
-- `codebase/backend/phase4_quality/institution_models.py`: Updated `InstitutionSettings` with `logo_path`, `logo_updated_at`, and serialization properties (`has_custom_logo`, `logo_url`, `logo_updated_at`).
+### Backend Enhancements & APIs
 - `codebase/backend/phase4_quality/admin_routes.py`:
-  - `GET /api/institution/logo`: Serves custom school logo or fallback vector SVG academic crest.
-  - `GET /api/institution/profile`: Public endpoint returning school name, code, academic year, and logo metadata.
-  - `POST /api/admin/institution/logo`: Administrator endpoint supporting PNG, JPG, and SVG. Enforces 2MB max file size, 25MP decompression bomb limit, dimension bounds (≤ 2048×2048 px) via Pillow, and strict XML/SVG sanitization blocking `<script>`, inline event handlers, `<!DOCTYPE`, and `<!ENTITY`.
-  - `DELETE /api/admin/institution/logo`: Restores default academic crest, removes file from disk, and records audit event.
-- `codebase/backend/app.py`: Configured `BRANDING_DIRECTORY` pointing to `%LOCALAPPDATA%\ClassroomOS\data\branding` in desktop mode or `instance/branding` in dev/test.
+  - `GET /api/institution/profile` and `PUT /api/admin/institution`: Complete institution profile editing including description.
+  - `PUT /api/admin/classes/<id>`: Class and section renaming with automated student enrollment and attendance session synchronization.
+  - `PUT /api/admin/terms/<id>` & `DELETE /api/admin/terms/<id>`: Full academic term lifecycle management.
+  - `GET /api/admin/storage`: Real-time storage metrics (DB size, backup size, disk free space via `shutil.disk_usage`).
+  - `POST /api/admin/backups`: On-demand verified SQLite snapshot creation with SHA-256 manifest.
+  - `POST /api/admin/backups/restore`: Point-in-time database restoration with automated pre-restore safety snapshot.
+  - `DELETE /api/admin/backups/<filename>`: Authenticated backup archive deletion with audit logging.
+  - `GET /api/admin/whatsapp/config` & `PUT /api/admin/whatsapp/config`: Cloud API credential and template configuration.
+  - `POST /api/admin/whatsapp/test-message`: Safe simulated sandbox dispatch testing.
+  - `GET /api/admin/whatsapp/logs` & `POST /api/whatsapp/manual-log`: Full notification logging for manual and automated dispatches.
+- `codebase/backend/phase4_quality/auth.py`:
+  - `PUT /api/auth/users/<id>`: Complete staff account editing (full name, email, role, assigned class/section, active status) with RBAC checks and audit trail.
+- `codebase/backend/phase1_students/routes.py`:
+  - Integrated guardian contact, international phone format, consent status, and preference fields into student registration and profile updates.
 
-### Frontend Branding & Universal Responsiveness
-- `codebase/frontend/src/shared/SchoolLogo.jsx`: Reusable SVG/image component with size variants (`xs`, `sm`, `md`, `lg`, `xl`, `2xl`), error boundary fallback, and vector SVG crest.
-- `codebase/frontend/src/shared/Navbar.jsx`: Integrated `SchoolLogo` alongside institution name and code badge.
-- `codebase/frontend/src/pages/AdminSettings.jsx`: Full Institution Branding card with live logo preview, upload/replace, remove button, dimension checks, and real-time state synchronization via `onInstitutionUpdated`.
+### Frontend Modernization & Offline Resilience
+- `codebase/frontend/src/pages/AdminSettings.jsx`: Overhauled into 7 modular, tabbed cards (`institution`, `classes`, `terms`, `users`, `whatsapp`, `storage`, `audit`) with full field editability, reset buttons, and loading states.
 - `codebase/frontend/src/App.jsx`:
-  - Added public institution profile loader on initial mount.
-  - Added Institutional Profile Banner on Dashboard.
-  - Added Institutional Ledger header on Reports tab (visible on screen and in print/PDF).
-  - Added `SchoolLogo` in Student Portfolio modal and Educator Sign-In modal.
-  - Updated camera capture attribute to `accept="image/*" capture="environment"` for direct mobile camera launch.
-- `codebase/frontend/src/index.css`:
-  - Added `overflow-x: hidden; width: 100%;` to `html, body`.
-  - Enforced minimum 44px touch targets on buttons, inputs, hamburger menu, and attendance toggles on mobile screens.
-  - Single-hand thumb-friendly attendance marking rules (`.status-btn-group` flex layout).
-  - iOS zoom prevention (`font-size: 16px; min-height: 44px` on form controls).
-  - Responsive breakpoints down to 320px (`<= 480px`, `<= 375px`, `320px`).
+  - Integrated Guardian Information into Add/Edit Student modals and Student Portfolio views.
+  - Added *Send WhatsApp* action buttons on Daily Attendance roster and Student directory.
+  - Implemented the Manual WhatsApp Notification Preview Modal with template selection (`Absent Today`, `Late Arrival`, `General Notice`), live token interpolation (`{student_name}`, `{date}`, `{school_name}`), and secure `wa.me` deep-link launching.
+  - Added real-time non-intrusive offline status banner tracking `navigator.onLine`.
+- `codebase/frontend/src/index.css`: Replaced external Google Fonts with local system typography stack; established institutional navy theme tokens.
+- `codebase/frontend/public/manifest.webmanifest` & `public/sw.js`: PWA configuration and resilient service worker.
 
-### Desktop Packaging & Release Automation
-- `build-release.ps1`: Automated PowerShell release builder compiling frontend, copying backend, assembling standalone bundle, compressing portable ZIP, and generating SHA-256 checksums.
-- `packaging/ClassroomOS.iss`: Inno Setup installer script with Windows Start Menu shortcuts, AppData persistence, and uninstaller.
-- `dist_release/ClassroomOS-v2.0.0-Portable-Windows.zip`: Standalone release package (141 KB).
-- `dist_release/SHA256SUMS.txt`: Cryptographic integrity manifest.
+### Product Landing Website
+- `website/index.html`: High-performance, responsive product landing page for `virtualgoal.com/classroomos` featuring hero, value proposition, feature grid, offline manifesto, Windows download links, system specs, SHA-256 verification instructions, and FAQ.
 
 ---
 
@@ -66,7 +72,11 @@
 # Backend Test Suite
 cd codebase/backend
 .\venv\Scripts\python.exe -m pytest -v
-# Result: 87 passed, 0 failed in 29.91s
+# Result: 97 passed, 0 failed in 39.81s
+
+# Playwright Responsive Viewport Matrix (320px to 1920px)
+node codebase/frontend/e2e-responsive.mjs
+# Result: 6/6 viewports passed with ZERO horizontal overflow
 
 # Frontend Linting
 cd codebase/frontend
@@ -75,19 +85,14 @@ npm run lint
 
 # Frontend Production Build
 npm run build
-# Result: Built in 1.28s (dist/index.html, dist/assets/*)
+# Result: Built in 1.57s (dist/index.html, dist/assets/*)
 
 # Release Packaging Pipeline
 powershell -ExecutionPolicy Bypass -File build-release.ps1
-# Result: Exit code 0, generated portable zip and SHA256SUMS.txt
+# Result: Exit code 0, generated ClassroomOS-Setup-2.1.0.exe, ClassroomOS-v2.1.0-Portable-Windows.zip, SHA256SUMS.txt
 ```
 
 ---
 
-## Blockers and Risks Status
-
-- **OpenCV / Pillow in Environment:** Resolved. Virtual environment contains both Pillow and OpenCV bindings; local Haar Cascade face detection and raster validation are fully operational and verified under pytest.
-- **Authentication & Security:** Resolved. Scrypt/pbkdf2 hashing, 12h session tokens, 15m brute-force lockout, XML/SVG sanitization, and decompression bomb guards are verified.
-- **Windows Packaging:** Resolved. Standalone portable distribution archive generated and Inno Setup script configured.
-- **Loopback Isolation:** Resolved. Desktop launcher binds strictly to `127.0.0.1` on supervised ports (5000–5050). Zero cloud telemetry or external network exposure.
-- **Status:** **ALL GAPS CLOSED. READY FOR PRODUCTION RELEASE.**
+## Final Status
+**ALL V2.1.0 ENHANCEMENT DELIVERABLES COMPLETED AND VERIFIED. READY FOR COMMUNITY RELEASE.**

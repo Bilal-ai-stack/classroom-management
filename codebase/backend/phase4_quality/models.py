@@ -31,6 +31,7 @@ class User(db.Model):
             'id': self.id,
             'email': self.email,
             'name': self.full_name,
+            'full_name': self.full_name,
             'role': self.role,
             'assigned_class': self.assigned_class or '',
             'is_active': self.is_active,

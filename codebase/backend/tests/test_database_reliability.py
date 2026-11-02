@@ -50,7 +50,7 @@ def test_legacy_database_migrates_without_changing_records(tmp_path):
     assert len(backups) == 1
     assert verify_backup(backups[0])
     with app.app_context():
-        assert current_schema_version(db.engine) == 5
+        assert current_schema_version(db.engine) == 6
         student = db.session.execute(text('SELECT roll_number, full_name FROM students WHERE id = 1')).one()
         attendance = db.session.execute(text('SELECT date, status FROM attendances WHERE student_id = 1')).one()
         assert tuple(student) == ('KEEP-1', 'Existing Student')

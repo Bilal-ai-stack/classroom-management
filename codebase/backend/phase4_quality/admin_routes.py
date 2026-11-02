@@ -1,13 +1,17 @@
 import os
 import re
+import shutil
+import sqlite3
+from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 import xml.etree.ElementTree as ET
 from flask import Blueprint, jsonify, request, send_file, Response, current_app
+from database_tools import create_backup, database_path_from_uri, verify_backup, integrity_check
 from db import db
 from phase1_students.models import Student
 from phase4_quality.auth import require_auth, require_roles, utcnow
-from phase4_quality.institution_models import AcademicClass, AcademicTerm, InstitutionSettings
+from phase4_quality.institution_models import AcademicClass, AcademicTerm, InstitutionSettings, WhatsAppNotification
 from phase4_quality.models import AuditEvent, User, record_audit
 
 try:
@@ -207,6 +211,7 @@ def update_institution_settings():
     settings.contact_email = email
     settings.contact_phone = str(data.get('contact_phone', '')).strip()
     settings.address = str(data.get('address', '')).strip()
+    settings.description = str(data.get('description', settings.description or '')).strip()
     settings.timezone = str(data.get('timezone', settings.timezone)).strip() or 'UTC'
     settings.min_attendance_warning_rate = min_rate
 
@@ -238,6 +243,10 @@ def get_public_institution_profile():
             'institution_code': settings.institution_code,
             'academic_year': settings.academic_year,
             'current_term': settings.current_term,
+            'contact_email': settings.contact_email,
+            'contact_phone': settings.contact_phone or '',
+            'address': settings.address or '',
+            'description': settings.description or '',
             'has_custom_logo': d.get('has_custom_logo', False),
             'logo_url': d.get('logo_url', '/api/institution/logo'),
             'logo_updated_at': d.get('logo_updated_at'),
@@ -474,12 +483,49 @@ def create_academic_class():
 @admin_bp.route('/admin/classes/<int:class_id>', methods=['PUT'])
 @require_roles('admin')
 def update_academic_class(class_id):
-    """Update class details (room, capacity, teacher, status)."""
+    """Update class details (name, section, room, capacity, teacher, status)."""
     cls = db.session.get(AcademicClass, class_id)
     if not cls:
         return jsonify({'success': False, 'error': 'Class not found.'}), 404
 
     data = request.get_json() or {}
+
+    old_name = cls.name
+    old_section = cls.section
+    new_name = str(data.get('name', old_name)).strip() or old_name
+    new_section = str(data.get('section', old_section)).strip() or old_section
+
+    if new_name != old_name or new_section != old_section:
+        conflict = AcademicClass.query.filter(
+            AcademicClass.id != class_id,
+            AcademicClass.name == new_name,
+            AcademicClass.section == new_section
+        ).first()
+        if conflict:
+            return jsonify({
+                'success': False,
+                'error': f"Class '{new_name}' Section '{new_section}' already exists."
+            }), 409
+
+        # Synchronize enrolled students safely
+        students = Student.query.filter_by(class_name=old_name, section=old_section).all()
+        for s in students:
+            s.class_name = new_name
+            s.section = new_section
+
+        # Synchronize attendance sessions safely
+        try:
+            from phase2_attendance.models import AttendanceSession
+            sessions = AttendanceSession.query.filter_by(class_name=old_name, section=old_section).all()
+            for sess in sessions:
+                sess.class_name = new_name
+                sess.section = new_section
+        except Exception:
+            pass
+
+        cls.name = new_name
+        cls.section = new_section
+
     if 'room_number' in data:
         cls.room_number = str(data['room_number']).strip()
     if 'capacity' in data:
@@ -646,3 +692,386 @@ def create_academic_term():
         'message': f"Term '{name}' created successfully.",
         'term': term.to_dict()
     }), 201
+
+
+@admin_bp.route('/admin/terms/<int:term_id>', methods=['PUT'])
+@require_roles('admin')
+def update_academic_term(term_id):
+    """Update an existing academic term."""
+    term = db.session.get(AcademicTerm, term_id)
+    if not term:
+        return jsonify({'success': False, 'error': 'Academic term not found.'}), 404
+
+    data = request.get_json() or {}
+    name = str(data.get('name', term.name)).strip()
+    start_date = str(data.get('start_date', term.start_date)).strip()
+    end_date = str(data.get('end_date', term.end_date)).strip()
+
+    if not name or not start_date or not end_date:
+        return jsonify({'success': False, 'error': 'Term name, start date, and end date are required.'}), 400
+
+    if start_date >= end_date:
+        return jsonify({'success': False, 'error': 'Start date must be before end date.'}), 400
+
+    old_data = term.to_dict()
+    term.name = name
+    term.start_date = start_date
+    term.end_date = end_date
+    if 'is_active' in data:
+        term.is_active = bool(data['is_active'])
+
+    record_audit('term.update', 'academic_term', term.id, {'previous': old_data, 'updated': term.to_dict()}, request.current_user.id)
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': f"Term '{name}' updated successfully.",
+        'term': term.to_dict()
+    }), 200
+
+
+@admin_bp.route('/admin/terms/<int:term_id>', methods=['DELETE'])
+@require_roles('admin')
+def delete_academic_term(term_id):
+    """Delete an academic term."""
+    term = db.session.get(AcademicTerm, term_id)
+    if not term:
+        return jsonify({'success': False, 'error': 'Academic term not found.'}), 404
+
+    record_audit('term.delete', 'academic_term', term.id, {'name': term.name}, request.current_user.id)
+    db.session.delete(term)
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': f"Term '{term.name}' deleted successfully."
+    }), 200
+
+
+# ---------------------------------------------------------------------------
+# WhatsApp Notification Module Endpoints
+# ---------------------------------------------------------------------------
+
+@admin_bp.route('/admin/whatsapp/config', methods=['GET'])
+@require_roles('admin')
+def get_whatsapp_config():
+    """Retrieve WhatsApp Business Platform / Cloud API configuration."""
+    settings = get_or_create_settings()
+    return jsonify({
+        'success': True,
+        'config': {
+            'whatsapp_enabled': settings.whatsapp_enabled,
+            'whatsapp_provider': settings.whatsapp_provider,
+            'whatsapp_phone_number_id': settings.whatsapp_phone_number_id or '',
+            'whatsapp_business_account_id': settings.whatsapp_business_account_id or '',
+            'whatsapp_api_token_configured': bool(settings.whatsapp_api_token_preview),
+            'whatsapp_api_token_preview': settings.whatsapp_api_token_preview or '',
+            'whatsapp_auto_notify_absent': settings.whatsapp_auto_notify_absent,
+            'whatsapp_auto_notify_late': settings.whatsapp_auto_notify_late,
+            'whatsapp_template_absent': settings.whatsapp_template_absent or '',
+            'whatsapp_template_late': settings.whatsapp_template_late or '',
+        }
+    }), 200
+
+
+@admin_bp.route('/admin/whatsapp/config', methods=['PUT'])
+@require_roles('admin')
+def update_whatsapp_config():
+    """Update WhatsApp configuration and templates."""
+    settings = get_or_create_settings()
+    data = request.get_json() or {}
+
+    old_config = {
+        'whatsapp_enabled': settings.whatsapp_enabled,
+        'whatsapp_provider': settings.whatsapp_provider,
+        'whatsapp_auto_notify_absent': settings.whatsapp_auto_notify_absent,
+        'whatsapp_auto_notify_late': settings.whatsapp_auto_notify_late
+    }
+
+    if 'whatsapp_enabled' in data:
+        settings.whatsapp_enabled = bool(data['whatsapp_enabled'])
+    if 'whatsapp_provider' in data:
+        settings.whatsapp_provider = str(data['whatsapp_provider']).strip() or 'cloud_api'
+    if 'whatsapp_phone_number_id' in data:
+        settings.whatsapp_phone_number_id = str(data['whatsapp_phone_number_id']).strip()
+    if 'whatsapp_business_account_id' in data:
+        settings.whatsapp_business_account_id = str(data['whatsapp_business_account_id']).strip()
+    if 'whatsapp_auto_notify_absent' in data:
+        settings.whatsapp_auto_notify_absent = bool(data['whatsapp_auto_notify_absent'])
+    if 'whatsapp_auto_notify_late' in data:
+        settings.whatsapp_auto_notify_late = bool(data['whatsapp_auto_notify_late'])
+    if 'whatsapp_template_absent' in data:
+        settings.whatsapp_template_absent = str(data['whatsapp_template_absent']).strip()
+    if 'whatsapp_template_late' in data:
+        settings.whatsapp_template_late = str(data['whatsapp_template_late']).strip()
+
+    if 'whatsapp_api_token' in data:
+        token = str(data['whatsapp_api_token']).strip()
+        if token:
+            settings.whatsapp_api_token_preview = f"...{token[-4:]}" if len(token) >= 4 else "configured"
+            # Note: in desktop mode or production, live API secrets are passed via system environment
+            os.environ['WHATSAPP_CLOUD_API_TOKEN'] = token
+
+    record_audit('whatsapp.config_update', 'institution_settings', settings.id, {'previous': old_config, 'updated': data}, request.current_user.id)
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': 'WhatsApp configuration saved successfully.',
+        'config': {
+            'whatsapp_enabled': settings.whatsapp_enabled,
+            'whatsapp_provider': settings.whatsapp_provider,
+            'whatsapp_phone_number_id': settings.whatsapp_phone_number_id or '',
+            'whatsapp_business_account_id': settings.whatsapp_business_account_id or '',
+            'whatsapp_api_token_configured': bool(settings.whatsapp_api_token_preview),
+            'whatsapp_api_token_preview': settings.whatsapp_api_token_preview or '',
+            'whatsapp_auto_notify_absent': settings.whatsapp_auto_notify_absent,
+            'whatsapp_auto_notify_late': settings.whatsapp_auto_notify_late,
+            'whatsapp_template_absent': settings.whatsapp_template_absent or '',
+            'whatsapp_template_late': settings.whatsapp_template_late or '',
+        }
+    }), 200
+
+
+@admin_bp.route('/admin/whatsapp/test-message', methods=['POST'])
+@require_roles('admin')
+def test_whatsapp_message():
+    """Send or simulate a WhatsApp test notification safely."""
+    data = request.get_json() or {}
+    phone = str(data.get('recipient_phone', '')).strip()
+    message = str(data.get('message_text', 'ClassroomOS test notification message.')).strip()
+
+    cleaned_phone = re.sub(r'[^0-9+]', '', phone)
+    if len(cleaned_phone) < 7:
+        return jsonify({'success': False, 'error': 'Invalid recipient phone number format.'}), 400
+
+    # Test/development simulated delivery (prevents unauthorized external calls and billing)
+    simulated_id = f"sim_wamid_{int(utcnow().timestamp())}"
+    notification = WhatsAppNotification(
+        recipient_phone=cleaned_phone,
+        recipient_name='Test Recipient',
+        message_type='test',
+        message_text=message,
+        mode='automatic_api',
+        status='sent',
+        provider_message_id=simulated_id,
+        created_at=utcnow(),
+        updated_at=utcnow(),
+        actor_user_id=request.current_user.id
+    )
+    db.session.add(notification)
+    db.session.flush()
+
+    record_audit('whatsapp.test_sent', 'whatsapp_notification', notification.id, {'phone': cleaned_phone}, request.current_user.id)
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': f"Test notification dispatched successfully (Simulated ID: {simulated_id}).",
+        'notification': notification.to_dict()
+    }), 200
+
+
+@admin_bp.route('/admin/whatsapp/logs', methods=['GET'])
+@require_roles('admin')
+def list_whatsapp_logs():
+    """List recent notification log entries."""
+    logs = WhatsAppNotification.query.order_by(WhatsAppNotification.created_at.desc()).limit(100).all()
+    return jsonify({
+        'success': True,
+        'count': len(logs),
+        'logs': [item.to_dict() for item in logs]
+    }), 200
+
+
+@admin_bp.route('/whatsapp/manual-log', methods=['POST'])
+@require_auth
+def log_manual_whatsapp():
+    """Record when a teacher or administrator generates/opens a manual WhatsApp notification link."""
+    data = request.get_json() or {}
+    student_id = data.get('student_id')
+    phone = str(data.get('recipient_phone', '')).strip()
+    name = str(data.get('recipient_name', '')).strip()
+    msg_type = str(data.get('message_type', 'attendance')).strip()
+    text = str(data.get('message_text', '')).strip()
+
+    cleaned_phone = re.sub(r'[^0-9+]', '', phone)
+    if not cleaned_phone or not text:
+        return jsonify({'success': False, 'error': 'Recipient phone and message text are required.'}), 400
+
+    notification = WhatsAppNotification(
+        student_id=student_id if student_id else None,
+        recipient_phone=cleaned_phone,
+        recipient_name=name,
+        message_type=msg_type,
+        message_text=text,
+        mode='manual_link',
+        status='prepared',
+        created_at=utcnow(),
+        updated_at=utcnow(),
+        actor_user_id=request.current_user.id
+    )
+    db.session.add(notification)
+    db.session.flush()
+
+    record_audit('whatsapp.manual_link_opened', 'whatsapp_notification', notification.id, {
+        'phone': cleaned_phone,
+        'student_id': student_id,
+        'message_type': msg_type
+    }, request.current_user.id)
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': 'Manual notification link logged.',
+        'notification': notification.to_dict()
+    }), 201
+
+
+# ---------------------------------------------------------------------------
+# Database Storage, Backups & Reliability Endpoints
+# ---------------------------------------------------------------------------
+
+def get_storage_paths():
+    uri = current_app.config['SQLALCHEMY_DATABASE_URI']
+    db_path = database_path_from_uri(uri)
+    backup_dir = Path(current_app.config.get('BACKUP_DIRECTORY') or (db_path.parent / 'backups'))
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    return db_path, backup_dir
+
+
+@admin_bp.route('/admin/storage', methods=['GET'])
+@require_roles('admin')
+def get_storage_info():
+    """Get database file size, backups list, integrity status, and available disk space."""
+    db_path, backup_dir = get_storage_paths()
+    db_size = db_path.stat().st_size if db_path.is_file() else 0
+
+    backups = []
+    total_backup_bytes = 0
+    if backup_dir.is_dir():
+        for f in sorted(backup_dir.glob('*.db'), key=lambda p: p.stat().st_mtime, reverse=True):
+            f_size = f.stat().st_size
+            total_backup_bytes += f_size
+            is_valid = verify_backup(f)
+            backups.append({
+                'filename': f.name,
+                'size_bytes': f_size,
+                'size_display': f"{round(f_size / 1024, 1)} KB",
+                'created_at': datetime.fromtimestamp(f.stat().st_mtime, timezone.utc).isoformat(),
+                'verified': is_valid
+            })
+
+    try:
+        total, used, free = shutil.disk_usage(str(db_path.parent))
+    except Exception:
+        total, used, free = 0, 0, 0
+
+    return jsonify({
+        'success': True,
+        'storage': {
+            'database_path': str(db_path),
+            'database_size_bytes': db_size,
+            'database_size_display': f"{round(db_size / 1024, 1)} KB",
+            'backup_directory': str(backup_dir),
+            'backup_count': len(backups),
+            'total_backup_size_bytes': total_backup_bytes,
+            'total_backup_size_display': f"{round(total_backup_bytes / 1024, 1)} KB",
+            'disk_free_bytes': free,
+            'disk_total_bytes': total,
+            'disk_free_display': f"{round(free / (1024 * 1024 * 1024), 2)} GB" if free else 'Unknown',
+            'backups': backups
+        }
+    }), 200
+
+
+@admin_bp.route('/admin/backups', methods=['POST'])
+@require_roles('admin')
+def trigger_backup():
+    """Create and verify an immediate, non-destructive SQLite database backup."""
+    db_path, backup_dir = get_storage_paths()
+    timestamp = utcnow().strftime('%Y%m%d_%H%M%S')
+    backup_file = backup_dir / f"manual-backup-{timestamp}.db"
+
+    try:
+        manifest = create_backup(db_path, backup_file)
+        record_audit('database.manual_backup', 'database', 1, {'filename': backup_file.name, 'sha256': manifest['sha256']}, request.current_user.id)
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'message': f"Verified backup created: {backup_file.name}",
+            'manifest': manifest
+        }), 201
+    except Exception as err:
+        return jsonify({'success': False, 'error': f"Backup creation failed: {err}"}), 500
+
+
+@admin_bp.route('/admin/backups/restore', methods=['POST'])
+@require_roles('admin')
+def restore_backup_endpoint():
+    """Safely restore database from a verified backup archive."""
+    data = request.get_json() or {}
+    filename = str(data.get('filename', '')).strip()
+
+    if not filename or not re.match(r'^[a-zA-Z0-9_\-\.]+\.db$', filename):
+        return jsonify({'success': False, 'error': 'Invalid backup filename format.'}), 400
+
+    db_path, backup_dir = get_storage_paths()
+    target_backup = backup_dir / filename
+    if not target_backup.is_file():
+        return jsonify({'success': False, 'error': 'Selected backup file does not exist.'}), 404
+
+    if not verify_backup(target_backup):
+        return jsonify({'success': False, 'error': 'Backup failed cryptographic integrity check. Refusing to restore.'}), 400
+
+    # Create safety snapshot of live database prior to restoring
+    safety_ts = utcnow().strftime('%Y%m%d_%H%M%S')
+    safety_backup = backup_dir / f"safety-pre-restore-{safety_ts}.db"
+    try:
+        create_backup(db_path, safety_backup)
+    except Exception as err:
+        return jsonify({'success': False, 'error': f"Failed creating safety snapshot prior to restore: {err}"}), 500
+
+    # Perform online SQLite live restoration
+    try:
+        src = sqlite3.connect(str(target_backup))
+        dest = sqlite3.connect(str(db_path))
+        src.backup(dest)
+        src.close()
+        dest.close()
+
+        record_audit('database.restore', 'database', 1, {'source_backup': filename, 'safety_backup': safety_backup.name}, request.current_user.id)
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f"Database restored successfully from '{filename}'. Safety snapshot preserved as '{safety_backup.name}'."
+        }), 200
+    except Exception as err:
+        return jsonify({'success': False, 'error': f"Database restore failed: {err}"}), 500
+
+
+@admin_bp.route('/admin/backups/<filename>', methods=['DELETE'])
+@require_roles('admin')
+def delete_backup_file(filename):
+    """Delete an old backup file and its manifest."""
+    if not filename or not re.match(r'^[a-zA-Z0-9_\-\.]+\.db$', filename):
+        return jsonify({'success': False, 'error': 'Invalid filename.'}), 400
+
+    _, backup_dir = get_storage_paths()
+    target = backup_dir / filename
+    manifest = target.with_suffix(target.suffix + '.manifest.json')
+
+    if not target.is_file():
+        return jsonify({'success': False, 'error': 'Backup file not found.'}), 404
+
+    try:
+        target.unlink()
+        if manifest.is_file():
+            manifest.unlink()
+        record_audit('database.backup_delete', 'backup', 0, {'filename': filename}, request.current_user.id)
+        db.session.commit()
+        return jsonify({'success': True, 'message': f"Backup '{filename}' deleted successfully."}), 200
+    except Exception as err:
+        return jsonify({'success': False, 'error': f"Failed to delete backup: {err}"}), 500
+

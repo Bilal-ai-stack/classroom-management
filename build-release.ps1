@@ -1,4 +1,4 @@
-# ClassroomOS 2.0.0 — Production Release Build & Packaging Script
+# ClassroomOS 2.1.0 — Production Release Build & Packaging Script
 # Generates production frontend build, compiled standalone Windows binary, portable zip archive, Inno Setup installer, and SHA-256 checksums
 
 $ErrorActionPreference = "Stop"
@@ -8,7 +8,7 @@ $FrontendDir = Join-Path $ProjectRoot "codebase\frontend"
 $BackendDir = Join-Path $ProjectRoot "codebase\backend"
 $DistReleaseDir = Join-Path $ProjectRoot "dist_release"
 $DistInstallerDir = Join-Path $ProjectRoot "dist_installer"
-$Version = "2.0.0"
+$Version = "2.1.0"
 
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host "  ClassroomOS v$Version -- Release Build Pipeline" -ForegroundColor Cyan
@@ -43,22 +43,20 @@ Write-Host "[OK] Temporary caches removed" -ForegroundColor Green
 
 # 3. Compile Standalone Windows Application with PyInstaller
 Write-Host ""
-Write-Host "[3/5] Verifying/Compiling standalone executable with PyInstaller..." -ForegroundColor Yellow
+Write-Host "[3/5] Compiling standalone executable with PyInstaller for v$Version..." -ForegroundColor Yellow
 $standaloneDir = Join-Path $BackendDir "dist\ClassroomOS"
 $pyinstallerExe = Join-Path $BackendDir "venv\Scripts\pyinstaller.exe"
 
-if (-not (Test-Path (Join-Path $standaloneDir "ClassroomOS.exe"))) {
-    if (Test-Path $pyinstallerExe) {
-        Write-Host "Running PyInstaller compilation..." -ForegroundColor Cyan
-        Push-Location $BackendDir
-        try {
-            & $pyinstallerExe --name ClassroomOS --noconfirm --onedir --clean --collect-all cv2 --collect-all PIL launcher.py
-        } finally {
-            Pop-Location
-        }
-    } else {
-        Write-Error "PyInstaller not found at $pyinstallerExe"
+if (Test-Path $pyinstallerExe) {
+    Write-Host "Running PyInstaller compilation..." -ForegroundColor Cyan
+    Push-Location $BackendDir
+    try {
+        & $pyinstallerExe --name ClassroomOS --noconfirm --onedir --clean --collect-all cv2 --collect-all PIL launcher.py
+    } finally {
+        Pop-Location
     }
+} else {
+    Write-Error "PyInstaller not found at $pyinstallerExe"
 }
 
 # Ensure built frontend SPA is present in the standalone executable directory

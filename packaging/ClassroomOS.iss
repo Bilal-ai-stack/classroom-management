@@ -2,7 +2,7 @@
 ; Preserves user database and audit records in {localappdata}\ClassroomOS\data across installs/uninstalls
 
 #define MyAppName "ClassroomOS"
-#define MyAppVersion "2.0.0"
+#define MyAppVersion "2.1.0"
 #define MyAppPublisher "Bilal AI Stack"
 #define MyAppURL "https://github.com/Bilal-ai-stack/classroom-management"
 #define MyAppExeName "ClassroomOS.exe"

@@ -159,6 +159,10 @@ export const adminApi = {
     method: 'POST',
     body: JSON.stringify(data)
   }),
+  updateUser: (id, data) => apiRequest(`/admin/users/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  }),
   toggleUserStatus: (id, isActive) => apiRequest(`/admin/users/${id}/status`, {
     method: 'PATCH',
     body: JSON.stringify({ is_active: isActive })
@@ -172,6 +176,13 @@ export const adminApi = {
     method: 'POST',
     body: JSON.stringify(data)
   }),
+  updateTerm: (id, data) => apiRequest(`/admin/terms/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  }),
+  deleteTerm: (id) => apiRequest(`/admin/terms/${id}`, {
+    method: 'DELETE'
+  }),
   getAuditEvents: () => apiRequest('/admin/audit-events'),
   uploadLogo: (file) => {
     const formData = new FormData();
@@ -183,6 +194,37 @@ export const adminApi = {
   },
   removeLogo: () => apiRequest('/admin/institution/logo', {
     method: 'DELETE'
+  })
+};
+
+// Database Storage, Backups & Reliability API
+export const storageApi = {
+  getStorageInfo: () => apiRequest('/admin/storage'),
+  createBackup: () => apiRequest('/admin/backups', { method: 'POST' }),
+  restoreBackup: (filename) => apiRequest('/admin/backups/restore', {
+    method: 'POST',
+    body: JSON.stringify({ filename })
+  }),
+  deleteBackup: (filename) => apiRequest(`/admin/backups/${encodeURIComponent(filename)}`, {
+    method: 'DELETE'
+  })
+};
+
+// Guardian WhatsApp Notification Module API
+export const whatsappApi = {
+  getConfig: () => apiRequest('/admin/whatsapp/config'),
+  updateConfig: (data) => apiRequest('/admin/whatsapp/config', {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  }),
+  sendTestMessage: (recipientPhone, messageText) => apiRequest('/admin/whatsapp/test-message', {
+    method: 'POST',
+    body: JSON.stringify({ recipient_phone: recipientPhone, message_text: messageText })
+  }),
+  getLogs: () => apiRequest('/admin/whatsapp/logs'),
+  logManualDispatch: (data) => apiRequest('/whatsapp/manual-log', {
+    method: 'POST',
+    body: JSON.stringify(data)
   })
 };
 

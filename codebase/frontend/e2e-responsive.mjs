@@ -42,8 +42,10 @@ async function run() {
   console.log('  ClassroomOS Playwright Responsive E2E Test Suite');
   console.log('==========================================================\n');
 
-  // 1. Start test backend server using ClassroomOS.exe
+  // 1. Start test backend server using ClassroomOS.exe or venv python launcher
   const exePath = path.resolve(__dirname, '..', 'backend', 'dist', 'ClassroomOS', 'ClassroomOS.exe');
+  const pythonPath = path.resolve(__dirname, '..', 'backend', 'venv', 'Scripts', 'python.exe');
+  const launcherPath = path.resolve(__dirname, '..', 'backend', 'launcher.py');
   const testAppData = path.resolve(__dirname, '..', 'backend', 'instance', 'test_e2e_appdata');
   if (fs.existsSync(testAppData)) {
     fs.rmSync(testAppData, { recursive: true, force: true });
@@ -51,10 +53,20 @@ async function run() {
   fs.mkdirSync(testAppData, { recursive: true });
 
   console.log(`[1] Launching standalone ClassroomOS server on port ${PORT}...`);
-  const server = spawn(exePath, ['--port', String(PORT), '--no-browser'], {
-    env: { ...process.env, LOCALAPPDATA: testAppData, CLASSROOM_DESKTOP: '1' },
-    stdio: 'ignore'
-  });
+  let server;
+  if (fs.existsSync(exePath)) {
+    console.log(`Using standalone binary: ${exePath}`);
+    server = spawn(exePath, ['--port', String(PORT), '--no-browser'], {
+      env: { ...process.env, LOCALAPPDATA: testAppData, CLASSROOM_DESKTOP: '1' },
+      stdio: 'ignore'
+    });
+  } else {
+    console.log(`Using python launcher: ${pythonPath}`);
+    server = spawn(pythonPath, [launcherPath, '--port', String(PORT), '--no-browser'], {
+      env: { ...process.env, LOCALAPPDATA: testAppData, CLASSROOM_DESKTOP: '1' },
+      stdio: 'ignore'
+    });
+  }
 
   const isUp = await waitForServer(BASE_URL);
   if (!isUp) {

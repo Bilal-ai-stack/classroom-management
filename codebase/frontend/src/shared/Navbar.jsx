@@ -14,8 +14,7 @@ import {
   Menu,
   X as CloseIcon,
   Settings,
-  Sparkles,
-  UserPlus
+  Sparkles
 } from 'lucide-react';
 
 import SchoolLogo from './SchoolLogo';

@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Modal from '../shared/Modal';
 import SchoolLogo from '../shared/SchoolLogo';
-import { adminApi } from '../shared/api';
+import { adminApi, storageApi, whatsappApi } from '../shared/api';
 import {
   Building2,
   Layers,
+  Calendar,
   Users,
+  MessageSquare,
+  HardDrive,
   Shield,
   Save,
   Plus,
@@ -19,14 +22,20 @@ import {
   Upload,
   Image as ImageIcon,
   AlertCircle,
-  RotateCcw
+  RotateCcw,
+  CheckCircle,
+  Send,
+  Database,
+  Info
 } from 'lucide-react';
 
 export default function AdminSettings({ teacherProfile, onShowToast, onInstitutionUpdated }) {
-  const [subTab, setSubTab] = useState('institution'); // 'institution' | 'classes' | 'users' | 'audit'
+  const [subTab, setSubTab] = useState('institution'); // 'institution' | 'classes' | 'terms' | 'users' | 'whatsapp' | 'storage' | 'audit'
   const [loading, setLoading] = useState(false);
 
-  // Institution State
+  // -------------------------------------------------------------------------
+  // 1. Institution Profile & Branding State
+  // -------------------------------------------------------------------------
   const [institution, setInstitution] = useState({
     institution_name: '',
     institution_code: '',
@@ -35,18 +44,22 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
     contact_email: '',
     contact_phone: '',
     address: '',
+    description: '',
     timezone: 'UTC',
     min_attendance_warning_rate: 75.0,
     has_custom_logo: false,
     logo_url: '/api/institution/logo'
   });
+  const [originalInstitution, setOriginalInstitution] = useState(null);
   const [savingInst, setSavingInst] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [logoPreviewUrl, setLogoPreviewUrl] = useState(null);
   const [logoError, setLogoError] = useState('');
   const logoInputRef = useRef(null);
 
-  // Classes & Sections State
+  // -------------------------------------------------------------------------
+  // 2. Classes & Sections State
+  // -------------------------------------------------------------------------
   const [classesList, setClassesList] = useState([]);
   const [isClassModalOpen, setIsClassModalOpen] = useState(false);
   const [editingClass, setEditingClass] = useState(null);
@@ -58,9 +71,25 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
     class_teacher_user_id: ''
   });
 
-  // Users State
+  // -------------------------------------------------------------------------
+  // 3. Academic Terms State
+  // -------------------------------------------------------------------------
+  const [termsList, setTermsList] = useState([]);
+  const [isTermModalOpen, setIsTermModalOpen] = useState(false);
+  const [editingTerm, setEditingTerm] = useState(null);
+  const [termForm, setTermForm] = useState({
+    name: 'Spring 2027 Term',
+    start_date: '2027-01-10',
+    end_date: '2027-05-30',
+    is_active: false
+  });
+
+  // -------------------------------------------------------------------------
+  // 4. Staff Accounts State
+  // -------------------------------------------------------------------------
   const [usersList, setUsersList] = useState([]);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
   const [isResetPassModalOpen, setIsResetPassModalOpen] = useState(false);
   const [selectedUserForReset, setSelectedUserForReset] = useState(null);
   const [newPasswordInput, setNewPasswordInput] = useState('');
@@ -72,12 +101,51 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
     password: ''
   });
 
-  // Audit Events State
+  // -------------------------------------------------------------------------
+  // 5. WhatsApp Module Configuration State
+  // -------------------------------------------------------------------------
+  const [whatsappConfig, setWhatsappConfig] = useState({
+    whatsapp_enabled: false,
+    whatsapp_provider: 'cloud_api',
+    whatsapp_phone_number_id: '',
+    whatsapp_business_account_id: '',
+    whatsapp_api_token: '',
+    whatsapp_api_token_configured: false,
+    whatsapp_api_token_preview: '',
+    whatsapp_auto_notify_absent: false,
+    whatsapp_auto_notify_late: false,
+    whatsapp_template_absent: 'Dear Guardian, {student_name} was marked ABSENT today ({date}) at {school_name}. Please contact the school office if you have any questions.',
+    whatsapp_template_late: 'Dear Guardian, {student_name} arrived LATE to class today ({date}) at {school_name}.'
+  });
+  const [savingWhatsapp, setSavingWhatsapp] = useState(false);
+  const [whatsappLogs, setWhatsappLogs] = useState([]);
+  const [testPhoneInput, setTestPhoneInput] = useState('+15550001234');
+  const [testMessageInput, setTestMessageInput] = useState('This is a test notification dispatched from ClassroomOS.');
+  const [isTestingWhatsapp, setIsTestingWhatsapp] = useState(false);
+
+  // -------------------------------------------------------------------------
+  // 6. Database Storage & Backups State
+  // -------------------------------------------------------------------------
+  const [storageInfo, setStorageInfo] = useState(null);
+  const [isBackingUp, setIsBackingUp] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
+
+  // -------------------------------------------------------------------------
+  // 7. Security Audit Events State
+  // -------------------------------------------------------------------------
   const [auditEvents, setAuditEvents] = useState([]);
   const [auditFilter, setAuditFilter] = useState('');
 
+  // Stable references for parent callbacks to prevent infinite re-render loops
+  const onShowToastRef = useRef(onShowToast);
+  const onInstitutionUpdatedRef = useRef(onInstitutionUpdated);
+  useEffect(() => {
+    onShowToastRef.current = onShowToast;
+    onInstitutionUpdatedRef.current = onInstitutionUpdated;
+  }, [onShowToast, onInstitutionUpdated]);
+
   // -------------------------------------------------------------------------
-  // Fetch Functions
+  // Fetch Handlers
   // -------------------------------------------------------------------------
 
   const fetchInstitution = useCallback(async () => {
@@ -86,15 +154,15 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
       const res = await adminApi.getInstitution();
       if (res.success && res.settings) {
         setInstitution(res.settings);
+        setOriginalInstitution(res.settings);
         setLogoPreviewUrl(res.settings.logo_url);
-        onInstitutionUpdated?.(res.settings);
       }
     } catch (err) {
-      onShowToast?.(err.message || 'Failed to load institution settings', 'error');
+      onShowToastRef.current?.(err.message || 'Failed to load institution settings', 'error');
     } finally {
       setLoading(false);
     }
-  }, [onShowToast, onInstitutionUpdated]);
+  }, []);
 
   const fetchClasses = useCallback(async () => {
     try {
@@ -104,11 +172,25 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
         setClassesList(res.classes || []);
       }
     } catch (err) {
-      onShowToast?.(err.message || 'Failed to load classes', 'error');
+      onShowToastRef.current?.(err.message || 'Failed to load classes', 'error');
     } finally {
       setLoading(false);
     }
-  }, [onShowToast]);
+  }, []);
+
+  const fetchTerms = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await adminApi.getTerms();
+      if (res.success) {
+        setTermsList(res.terms || []);
+      }
+    } catch (err) {
+      onShowToastRef.current?.(err.message || 'Failed to load academic terms', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -118,11 +200,49 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
         setUsersList(res.users || []);
       }
     } catch (err) {
-      onShowToast?.(err.message || 'Failed to load user accounts', 'error');
+      onShowToastRef.current?.(err.message || 'Failed to load user accounts', 'error');
     } finally {
       setLoading(false);
     }
-  }, [onShowToast]);
+  }, []);
+
+  const fetchWhatsapp = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [cfgRes, logsRes] = await Promise.all([
+        whatsappApi.getConfig(),
+        whatsappApi.getLogs()
+      ]);
+      if (cfgRes.success && cfgRes.config) {
+        setWhatsappConfig((prev) => ({
+          ...prev,
+          ...cfgRes.config,
+          whatsapp_api_token: ''
+        }));
+      }
+      if (logsRes.success) {
+        setWhatsappLogs(logsRes.logs || []);
+      }
+    } catch (err) {
+      onShowToastRef.current?.(err.message || 'Failed to load WhatsApp settings', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchStorage = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await storageApi.getStorageInfo();
+      if (res.success) {
+        setStorageInfo(res.storage);
+      }
+    } catch (err) {
+      onShowToastRef.current?.(err.message || 'Failed to load storage details', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   const fetchAuditEvents = useCallback(async () => {
     try {
@@ -132,21 +252,24 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
         setAuditEvents(res.events || []);
       }
     } catch (err) {
-      onShowToast?.(err.message || 'Failed to load audit events', 'error');
+      onShowToastRef.current?.(err.message || 'Failed to load audit events', 'error');
     } finally {
       setLoading(false);
     }
-  }, [onShowToast]);
+  }, []);
 
   useEffect(() => {
     if (subTab === 'institution') fetchInstitution();
     else if (subTab === 'classes') fetchClasses();
+    else if (subTab === 'terms') fetchTerms();
     else if (subTab === 'users') fetchUsers();
+    else if (subTab === 'whatsapp') fetchWhatsapp();
+    else if (subTab === 'storage') fetchStorage();
     else if (subTab === 'audit') fetchAuditEvents();
-  }, [subTab, fetchInstitution, fetchClasses, fetchUsers, fetchAuditEvents]);
+  }, [subTab, fetchInstitution, fetchClasses, fetchTerms, fetchUsers, fetchWhatsapp, fetchStorage, fetchAuditEvents]);
 
   // -------------------------------------------------------------------------
-  // Institution & Logo Actions
+  // 1. Institution Actions
   // -------------------------------------------------------------------------
 
   const handleUploadLogoFile = async (file) => {
@@ -161,13 +284,14 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
       const res = await adminApi.uploadLogo(file);
       if (res.success && res.settings) {
         setInstitution(res.settings);
+        setOriginalInstitution(res.settings);
         setLogoPreviewUrl(res.settings.logo_url);
-        onInstitutionUpdated?.(res.settings);
-        onShowToast?.('School logo uploaded and activated successfully!', 'success');
+        onInstitutionUpdatedRef.current?.(res.settings);
+        onShowToastRef.current?.('School logo uploaded and activated successfully!', 'success');
       }
     } catch (err) {
       setLogoError(err.message || 'Failed to upload school logo.');
-      onShowToast?.(err.message || 'Logo upload failed', 'error');
+      onShowToastRef.current?.(err.message || 'Logo upload failed', 'error');
     } finally {
       setIsUploadingLogo(false);
       if (logoInputRef.current) logoInputRef.current.value = '';
@@ -184,13 +308,14 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
       const res = await adminApi.removeLogo();
       if (res.success && res.settings) {
         setInstitution(res.settings);
+        setOriginalInstitution(res.settings);
         setLogoPreviewUrl(res.settings.logo_url);
-        onInstitutionUpdated?.(res.settings);
-        onShowToast?.('Custom logo removed. Default academic crest restored.', 'success');
+        onInstitutionUpdatedRef.current?.(res.settings);
+        onShowToastRef.current?.('Custom logo removed. Default academic crest restored.', 'success');
       }
     } catch (err) {
       setLogoError(err.message || 'Failed to remove custom logo.');
-      onShowToast?.(err.message || 'Failed to remove logo', 'error');
+      onShowToastRef.current?.(err.message || 'Failed to remove logo', 'error');
     } finally {
       setIsUploadingLogo(false);
     }
@@ -203,18 +328,26 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
       const res = await adminApi.updateInstitution(institution);
       if (res.success && res.settings) {
         setInstitution(res.settings);
-        onInstitutionUpdated?.(res.settings);
-        onShowToast?.('Institution settings updated successfully!', 'success');
+        setOriginalInstitution(res.settings);
+        onInstitutionUpdatedRef.current?.(res.settings);
+        onShowToastRef.current?.('Institution settings updated successfully!', 'success');
       }
     } catch (err) {
-      onShowToast?.(err.message || 'Failed to save settings', 'error');
+      onShowToastRef.current?.(err.message || 'Failed to save settings', 'error');
     } finally {
       setSavingInst(false);
     }
   };
 
+  const handleResetInstitution = () => {
+    if (originalInstitution) {
+      setInstitution(originalInstitution);
+      onShowToastRef.current?.('Changes reverted to saved values.', 'info');
+    }
+  };
+
   // -------------------------------------------------------------------------
-  // Class / Section Actions
+  // 2. Class Actions
   // -------------------------------------------------------------------------
 
   const handleOpenAddClass = () => {
@@ -246,12 +379,14 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
     try {
       if (editingClass) {
         const payload = {
+          name: classForm.name,
+          section: classForm.section,
           room_number: classForm.room_number,
           capacity: Number(classForm.capacity),
           class_teacher_user_id: classForm.class_teacher_user_id ? Number(classForm.class_teacher_user_id) : null
         };
         await adminApi.updateClass(editingClass.id, payload);
-        onShowToast?.(`Class ${editingClass.name} updated successfully!`, 'success');
+        onShowToast?.(`Class ${classForm.name} (Section ${classForm.section}) updated successfully!`, 'success');
       } else {
         const payload = {
           name: classForm.name,
@@ -284,32 +419,123 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
   };
 
   // -------------------------------------------------------------------------
-  // User Actions
+  // 3. Academic Term Actions
   // -------------------------------------------------------------------------
 
-  const handleCreateUser = async (e) => {
+  const handleOpenAddTerm = () => {
+    setEditingTerm(null);
+    setTermForm({
+      name: 'Spring 2027 Term',
+      start_date: '2027-01-10',
+      end_date: '2027-05-30',
+      is_active: false
+    });
+    setIsTermModalOpen(true);
+  };
+
+  const handleOpenEditTerm = (term) => {
+    setEditingTerm(term);
+    setTermForm({
+      name: term.name,
+      start_date: term.start_date,
+      end_date: term.end_date,
+      is_active: term.is_active
+    });
+    setIsTermModalOpen(true);
+  };
+
+  const handleSaveTerm = async (e) => {
     e.preventDefault();
     try {
-      const payload = {
-        full_name: userForm.full_name,
-        email: userForm.email,
-        role: userForm.role,
-        password: userForm.password,
-        assigned_class: userForm.role === 'teacher' ? userForm.assigned_class : null
-      };
-      await adminApi.createUser(payload);
-      onShowToast?.(`Account created for ${userForm.full_name}!`, 'success');
+      if (editingTerm) {
+        await adminApi.updateTerm(editingTerm.id, termForm);
+        onShowToast?.(`Academic term '${termForm.name}' updated!`, 'success');
+      } else {
+        await adminApi.createTerm(termForm);
+        onShowToast?.(`Academic term '${termForm.name}' created!`, 'success');
+      }
+      setIsTermModalOpen(false);
+      fetchTerms();
+    } catch (err) {
+      onShowToast?.(err.message || 'Failed to save academic term', 'error');
+    }
+  };
+
+  const handleDeleteTerm = async (term) => {
+    if (!window.confirm(`Are you sure you want to delete term '${term.name}'?`)) {
+      return;
+    }
+    try {
+      await adminApi.deleteTerm(term.id);
+      onShowToast?.(`Term '${term.name}' deleted.`, 'success');
+      fetchTerms();
+    } catch (err) {
+      onShowToast?.(err.message || 'Failed to delete term', 'error');
+    }
+  };
+
+  // -------------------------------------------------------------------------
+  // 4. User Actions
+  // -------------------------------------------------------------------------
+
+  const handleOpenAddUser = () => {
+    setEditingUser(null);
+    setUserForm({
+      full_name: '',
+      email: '',
+      role: 'teacher',
+      assigned_class: classesList[0]?.name || 'Grade 4',
+      password: ''
+    });
+    setIsUserModalOpen(true);
+  };
+
+  const handleOpenEditUser = (user) => {
+    setEditingUser(user);
+    setUserForm({
+      full_name: user.name || user.full_name || '',
+      email: user.email,
+      role: user.role,
+      assigned_class: user.assigned_class || (classesList[0]?.name || 'Grade 4'),
+      password: ''
+    });
+    setIsUserModalOpen(true);
+  };
+
+  const handleSaveUser = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingUser) {
+        const payload = {
+          full_name: userForm.full_name,
+          email: userForm.email,
+          role: userForm.role,
+          assigned_class: userForm.role === 'teacher' ? userForm.assigned_class : null
+        };
+        await adminApi.updateUser(editingUser.id, payload);
+        onShowToast?.(`Staff details updated for ${userForm.full_name}!`, 'success');
+      } else {
+        const payload = {
+          full_name: userForm.full_name,
+          email: userForm.email,
+          role: userForm.role,
+          password: userForm.password,
+          assigned_class: userForm.role === 'teacher' ? userForm.assigned_class : null
+        };
+        await adminApi.createUser(payload);
+        onShowToast?.(`Account created for ${userForm.full_name}!`, 'success');
+      }
       setIsUserModalOpen(false);
       fetchUsers();
     } catch (err) {
-      onShowToast?.(err.message || 'Failed to create account', 'error');
+      onShowToast?.(err.message || 'Failed to save staff account', 'error');
     }
   };
 
   const handleToggleUserStatus = async (user) => {
     const nextStatus = !user.is_active;
     const actionText = nextStatus ? 'activate' : 'deactivate';
-    if (!window.confirm(`Are you sure you want to ${actionText} ${user.name}?`)) {
+    if (!window.confirm(`Are you sure you want to ${actionText} account for ${user.name}?`)) {
       return;
     }
     try {
@@ -326,12 +552,104 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
     if (!selectedUserForReset) return;
     try {
       await adminApi.resetPassword(selectedUserForReset.id, newPasswordInput);
-      onShowToast?.(`Password reset successfully for ${selectedUserForReset.name}.`, 'success');
+      onShowToast?.(`Password reset successfully for ${selectedUserForReset.name}. Existing sessions invalidated.`, 'success');
       setIsResetPassModalOpen(false);
       setNewPasswordInput('');
       setSelectedUserForReset(null);
     } catch (err) {
       onShowToast?.(err.message || 'Password reset failed', 'error');
+    }
+  };
+
+  // -------------------------------------------------------------------------
+  // 5. WhatsApp Module Actions
+  // -------------------------------------------------------------------------
+
+  const handleSaveWhatsappConfig = async (e) => {
+    e.preventDefault();
+    setSavingWhatsapp(true);
+    try {
+      const res = await whatsappApi.updateConfig(whatsappConfig);
+      if (res.success && res.config) {
+        setWhatsappConfig((prev) => ({
+          ...prev,
+          ...res.config,
+          whatsapp_api_token: ''
+        }));
+        onShowToast?.('WhatsApp configuration and templates saved successfully!', 'success');
+      }
+    } catch (err) {
+      onShowToast?.(err.message || 'Failed to save WhatsApp config', 'error');
+    } finally {
+      setSavingWhatsapp(false);
+    }
+  };
+
+  const handleSendTestWhatsapp = async (e) => {
+    e.preventDefault();
+    setIsTestingWhatsapp(true);
+    try {
+      const res = await whatsappApi.sendTestMessage(testPhoneInput, testMessageInput);
+      if (res.success) {
+        onShowToast?.(res.message || 'Test notification dispatched successfully!', 'success');
+        fetchWhatsapp();
+      }
+    } catch (err) {
+      onShowToast?.(err.message || 'Test message dispatch failed', 'error');
+    } finally {
+      setIsTestingWhatsapp(false);
+    }
+  };
+
+  // -------------------------------------------------------------------------
+  // 6. Database Storage & Backup Actions
+  // -------------------------------------------------------------------------
+
+  const handleCreateBackup = async () => {
+    setIsBackingUp(true);
+    try {
+      const res = await storageApi.createBackup();
+      if (res.success) {
+        onShowToast?.(res.message || 'Verified backup created successfully!', 'success');
+        fetchStorage();
+      }
+    } catch (err) {
+      onShowToast?.(err.message || 'Backup failed', 'error');
+    } finally {
+      setIsBackingUp(false);
+    }
+  };
+
+  const handleRestoreBackup = async (filename) => {
+    if (!window.confirm(`CAUTION: Restoring database from backup '${filename}' will roll back current tables to that point in time. An automatic safety snapshot will be created first. Proceed?`)) {
+      return;
+    }
+    setIsRestoring(true);
+    try {
+      const res = await storageApi.restoreBackup(filename);
+      if (res.success) {
+        onShowToast?.(res.message || 'Database restored successfully!', 'success');
+        fetchStorage();
+      }
+    } catch (err) {
+      onShowToast?.(err.message || 'Restore failed', 'error');
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
+  const handleDeleteBackup = async (filename) => {
+    if (!window.confirm(`Are you sure you want to permanently delete backup archive '${filename}'?`)) {
+      return;
+    }
+    try {
+      const res = await storageApi.deleteBackup(filename);
+      if (res.success) {
+        onShowToast?.(res.message || 'Backup file deleted.', 'success');
+        fetchStorage();
+      }
+    } catch (err) {
+      onShowToast?.(err.message || 'Delete backup failed', 'error');
     }
   };
 
@@ -359,7 +677,7 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
           padding: '1.5rem',
           borderRadius: 'var(--radius-lg)',
           marginBottom: '1.5rem',
-          background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(14, 165, 233, 0.05) 100%)',
+          background: 'linear-gradient(135deg, rgba(30, 58, 138, 0.08) 0%, rgba(15, 23, 42, 0.04) 100%)',
           border: '1px solid var(--border)'
         }}
       >
@@ -367,14 +685,14 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.25rem' }}>
             <div
               style={{
-                width: '40px',
-                height: '40px',
+                width: '42px',
+                height: '42px',
                 borderRadius: 'var(--radius-md)',
-                backgroundColor: 'var(--primary-light)',
+                backgroundColor: 'rgba(30, 58, 138, 0.1)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: 'var(--primary)'
+                color: '#1E3A8A'
               }}
             >
               <Shield size={22} />
@@ -384,7 +702,7 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
             </h1>
           </div>
           <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-            Configure school parameters, manage academic classes & sections, provision staff accounts, and review security audit logs.
+            ClassroomOS 2.1 — Configure school parameters, academic structure, staff permissions, guardian notifications, and reliable local backups.
           </p>
         </div>
 
@@ -393,7 +711,10 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
             onClick={() => {
               if (subTab === 'institution') fetchInstitution();
               else if (subTab === 'classes') fetchClasses();
+              else if (subTab === 'terms') fetchTerms();
               else if (subTab === 'users') fetchUsers();
+              else if (subTab === 'whatsapp') fetchWhatsapp();
+              else if (subTab === 'storage') fetchStorage();
               else if (subTab === 'audit') fetchAuditEvents();
             }}
             className="btn-secondary"
@@ -418,9 +739,12 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
         }}
       >
         {[
-          { id: 'institution', label: 'School Settings', icon: Building2 },
+          { id: 'institution', label: 'School Profile & Branding', icon: Building2 },
           { id: 'classes', label: 'Classes & Sections', icon: Layers },
+          { id: 'terms', label: 'Academic Terms', icon: Calendar },
           { id: 'users', label: 'Staff Accounts', icon: Users },
+          { id: 'whatsapp', label: 'WhatsApp Module', icon: MessageSquare },
+          { id: 'storage', label: 'Database & Backups', icon: HardDrive },
           { id: 'audit', label: 'Security & Audit Logs', icon: History }
         ].map((tab) => {
           const Icon = tab.icon;
@@ -436,12 +760,13 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
                 padding: '0.75rem 1.25rem',
                 border: 'none',
                 background: 'none',
-                borderBottom: isActive ? '3px solid var(--primary)' : '3px solid transparent',
-                color: isActive ? 'var(--primary)' : 'var(--text-muted)',
+                borderBottom: isActive ? '3px solid #1E3A8A' : '3px solid transparent',
+                color: isActive ? '#1E3A8A' : 'var(--text-muted)',
                 fontWeight: isActive ? 600 : 500,
                 cursor: 'pointer',
                 transition: 'all 0.2s',
-                fontSize: '0.95rem'
+                fontSize: '0.95rem',
+                whiteSpace: 'nowrap'
               }}
             >
               <Icon size={18} />
@@ -452,24 +777,24 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
       </div>
 
       {/* --------------------------------------------------------------------- */}
-      {/* 1. School Settings Tab */}
+      {/* 1. School Profile & Branding Tab */}
       {/* --------------------------------------------------------------------- */}
       {subTab === 'institution' && (
         <form onSubmit={handleSaveInstitution} className="glass-card" style={{ padding: '2rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
           <h2 style={{ fontSize: '1.2rem', fontWeight: 600, marginBottom: '1.25rem', color: 'var(--text-main)' }}>
-            Institution Profile & Attendance Rules
+            Institution Profile, Branding & Attendance Standards
           </h2>
 
-          {/* Institution Branding & Logo Section */}
+          {/* School Branding Section */}
           <div className="card" style={{ padding: '1.25rem 1.5rem', marginBottom: '1.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--surface-color, rgba(255,255,255,0.7))' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
               <div>
                 <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <ImageIcon size={19} color="var(--primary)" />
-                  School Logo & Institution Branding
+                  <ImageIcon size={19} color="#1E3A8A" />
+                  School Logo & Institutional Crest
                 </h3>
                 <p style={{ margin: '0.25rem 0 0', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                  Active crest is displayed in the navigation header, student portfolios, and official attendance reports.
+                  Active emblem appears across navigation, student portfolios, official PDF exports, and print reports.
                 </p>
               </div>
               <span className={`badge ${institution.has_custom_logo ? 'badge-present' : 'badge-primary'}`} style={{ fontSize: '0.78rem', padding: '0.25rem 0.65rem' }}>
@@ -525,7 +850,7 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
                       onClick={handleRemoveLogo}
                       disabled={isUploadingLogo}
                       style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: '#EF4444' }}
-                      title="Remove custom logo and restore default academic crest"
+                      title="Revert to standard academic crest"
                     >
                       <RotateCcw size={15} />
                       <span>Restore Default Crest</span>
@@ -534,9 +859,9 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
                 </div>
 
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>
-                  <div>• Supported file formats: <strong>PNG, JPG, JPEG</strong>, or securely sanitized <strong>SVG</strong>.</div>
-                  <div>• Maximum file size: <strong>2 MB</strong>. Maximum raster resolution: <strong>2048 x 2048 px</strong>.</div>
-                  <div>• Persisted securely in application data directory across software updates and backups.</div>
+                  <div>• Supported file types: <strong>PNG, JPG, JPEG</strong>, or securely sanitized <strong>SVG</strong>.</div>
+                  <div>• Maximum file size: <strong>2 MB</strong>. Maximum raster bounds: <strong>2048 x 2048 px</strong>.</div>
+                  <div>• Stored securely in application directory and preserved across updates and backups.</div>
                 </div>
               </div>
             </div>
@@ -551,8 +876,8 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
                 type="text"
                 required
                 className="form-input"
-                value={institution.institution_name}
-                onChange={(e) => setInstitution({ ...institution, institution_name: e.target.value })}
+                value={institution.institution_name ?? ''}
+                onChange={(e) => setInstitution((prev) => ({ ...prev, institution_name: e.target.value }))}
                 placeholder="e.g. Springfield Academy"
                 style={{ width: '100%' }}
               />
@@ -566,8 +891,8 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
                 type="text"
                 required
                 className="form-input"
-                value={institution.institution_code}
-                onChange={(e) => setInstitution({ ...institution, institution_code: e.target.value })}
+                value={institution.institution_code ?? ''}
+                onChange={(e) => setInstitution((prev) => ({ ...prev, institution_code: e.target.value }))}
                 placeholder="e.g. SCH-001"
                 style={{ width: '100%' }}
               />
@@ -580,8 +905,8 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
               <input
                 type="text"
                 className="form-input"
-                value={institution.academic_year}
-                onChange={(e) => setInstitution({ ...institution, academic_year: e.target.value })}
+                value={institution.academic_year ?? ''}
+                onChange={(e) => setInstitution((prev) => ({ ...prev, academic_year: e.target.value }))}
                 placeholder="2026-2027"
                 style={{ width: '100%' }}
               />
@@ -594,8 +919,8 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
               <input
                 type="text"
                 className="form-input"
-                value={institution.current_term}
-                onChange={(e) => setInstitution({ ...institution, current_term: e.target.value })}
+                value={institution.current_term ?? ''}
+                onChange={(e) => setInstitution((prev) => ({ ...prev, current_term: e.target.value }))}
                 placeholder="Fall 2026"
                 style={{ width: '100%' }}
               />
@@ -609,8 +934,8 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
                 type="email"
                 required
                 className="form-input"
-                value={institution.contact_email}
-                onChange={(e) => setInstitution({ ...institution, contact_email: e.target.value })}
+                value={institution.contact_email ?? ''}
+                onChange={(e) => setInstitution((prev) => ({ ...prev, contact_email: e.target.value }))}
                 placeholder="admin@school.local"
                 style={{ width: '100%' }}
               />
@@ -618,13 +943,13 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
 
             <div>
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.4rem', color: 'var(--text-main)' }}>
-                Contact Phone
+                Official Contact Phone
               </label>
               <input
                 type="tel"
                 className="form-input"
-                value={institution.contact_phone}
-                onChange={(e) => setInstitution({ ...institution, contact_phone: e.target.value })}
+                value={institution.contact_phone ?? ''}
+                onChange={(e) => setInstitution((prev) => ({ ...prev, contact_phone: e.target.value }))}
                 placeholder="+1 (555) 019-2834"
                 style={{ width: '100%' }}
               />
@@ -636,8 +961,8 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
               </label>
               <select
                 className="form-select"
-                value={institution.timezone}
-                onChange={(e) => setInstitution({ ...institution, timezone: e.target.value })}
+                value={institution.timezone ?? 'UTC'}
+                onChange={(e) => setInstitution((prev) => ({ ...prev, timezone: e.target.value }))}
                 style={{ width: '100%' }}
               >
                 <option value="UTC">UTC (Universal Coordinated Time)</option>
@@ -653,46 +978,69 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
 
             <div>
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.4rem', color: 'var(--text-main)' }}>
-                Attendance Warning Threshold ({institution.min_attendance_warning_rate}%)
+                Attendance Warning Threshold ({institution.min_attendance_warning_rate ?? 75}%)
               </label>
               <input
                 type="range"
                 min="50"
                 max="95"
                 step="1"
-                value={institution.min_attendance_warning_rate}
-                onChange={(e) => setInstitution({ ...institution, min_attendance_warning_rate: parseFloat(e.target.value) })}
-                style={{ width: '100%', accentColor: 'var(--primary)' }}
+                value={institution.min_attendance_warning_rate ?? 75}
+                onChange={(e) => setInstitution((prev) => ({ ...prev, min_attendance_warning_rate: parseFloat(e.target.value) }))}
+                style={{ width: '100%', accentColor: '#1E3A8A' }}
               />
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                Students below {institution.min_attendance_warning_rate}% are flagged as needing attention.
+                Students falling below {institution.min_attendance_warning_rate ?? 75}% are flagged on attendance reports.
               </span>
             </div>
           </div>
 
-          <div style={{ marginBottom: '1.5rem' }}>
+          <div style={{ marginBottom: '1.25rem' }}>
             <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.4rem', color: 'var(--text-main)' }}>
-              Campus Address
+              Campus Physical Address
             </label>
-            <textarea
-              className="form-textarea"
-              rows={2}
-              value={institution.address}
-              onChange={(e) => setInstitution({ ...institution, address: e.target.value })}
-              placeholder="123 Education Boulevard, Springfield"
+            <input
+              type="text"
+              className="form-input"
+              value={institution.address ?? ''}
+              onChange={(e) => setInstitution((prev) => ({ ...prev, address: e.target.value }))}
+              placeholder="e.g. 123 Education Boulevard, Springfield"
               style={{ width: '100%' }}
             />
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.4rem', color: 'var(--text-main)' }}>
+              Institution Mission & Description
+            </label>
+            <textarea
+              className="form-textarea"
+              rows={2}
+              value={institution.description ?? ''}
+              onChange={(e) => setInstitution((prev) => ({ ...prev, description: e.target.value }))}
+              placeholder="Brief description of school ethos or administrative guidelines..."
+              style={{ width: '100%' }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={handleResetInstitution}
+              disabled={savingInst}
+              style={{ padding: '0.6rem 1.25rem' }}
+            >
+              Reset to Saved
+            </button>
             <button
               type="submit"
               className="btn-primary"
               disabled={savingInst}
-              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.5rem' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.5rem', backgroundColor: '#1E3A8A' }}
             >
               <Save size={18} />
-              <span>{savingInst ? 'Saving Settings...' : 'Save Configuration'}</span>
+              <span>{savingInst ? 'Saving Configuration...' : 'Save Configuration'}</span>
             </button>
           </div>
         </form>
@@ -710,7 +1058,7 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
             <button
               onClick={handleOpenAddClass}
               className="btn-primary"
-              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', backgroundColor: '#1E3A8A' }}
             >
               <Plus size={16} />
               <span>Add Class / Section</span>
@@ -735,7 +1083,7 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
                   <tr key={cls.id} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '0.75rem 1rem', fontWeight: 600 }}>{cls.name}</td>
                     <td style={{ padding: '0.75rem 1rem' }}>
-                      <span className="badge" style={{ backgroundColor: 'var(--primary-light)', color: 'var(--primary)', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
+                      <span className="badge" style={{ backgroundColor: 'rgba(30, 58, 138, 0.1)', color: '#1E3A8A', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
                         Section {cls.section}
                       </span>
                     </td>
@@ -766,7 +1114,7 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
                         onClick={() => handleOpenEditClass(cls)}
                         className="btn-icon"
                         title="Edit Class Details"
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', marginRight: '0.5rem', color: 'var(--primary)' }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', marginRight: '0.5rem', color: '#1E3A8A' }}
                       >
                         <Edit2 size={16} />
                       </button>
@@ -795,7 +1143,90 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
       )}
 
       {/* --------------------------------------------------------------------- */}
-      {/* 3. User Accounts Tab */}
+      {/* 3. Academic Terms Tab */}
+      {/* --------------------------------------------------------------------- */}
+      {subTab === 'terms' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+              Manage school academic calendar terms, semesters, and active instructional periods.
+            </p>
+            <button
+              onClick={handleOpenAddTerm}
+              className="btn-primary"
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', backgroundColor: '#1E3A8A' }}
+            >
+              <Plus size={16} />
+              <span>Add Academic Term</span>
+            </button>
+          </div>
+
+          <div className="table-container" style={{ borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '1px solid var(--border)' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ background: 'var(--border-light)', borderBottom: '1px solid var(--border)' }}>
+                  <th style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', fontWeight: 600 }}>Term Name</th>
+                  <th style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', fontWeight: 600 }}>Start Date</th>
+                  <th style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', fontWeight: 600 }}>End Date</th>
+                  <th style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', fontWeight: 600 }}>Status</th>
+                  <th style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', fontWeight: 600, textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {termsList.map((term) => (
+                  <tr key={term.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td style={{ padding: '0.75rem 1rem', fontWeight: 600 }}>{term.name}</td>
+                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)' }}>{term.start_date}</td>
+                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)' }}>{term.end_date}</td>
+                    <td style={{ padding: '0.75rem 1rem' }}>
+                      <span
+                        className="badge"
+                        style={{
+                          backgroundColor: term.is_active ? 'var(--success-bg)' : 'var(--border)',
+                          color: term.is_active ? 'var(--success)' : 'var(--text-muted)',
+                          padding: '0.2rem 0.5rem',
+                          borderRadius: '4px',
+                          fontSize: '0.8rem'
+                        }}
+                      >
+                        {term.is_active ? 'Current Active Term' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
+                      <button
+                        onClick={() => handleOpenEditTerm(term)}
+                        className="btn-icon"
+                        title="Edit Term"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', marginRight: '0.5rem', color: '#1E3A8A' }}
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteTerm(term)}
+                        className="btn-icon"
+                        title="Delete Term"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)' }}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {termsList.length === 0 && (
+                  <tr>
+                    <td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                      No academic terms configured yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* --------------------------------------------------------------------- */}
+      {/* 4. Staff Accounts Tab */}
       {/* --------------------------------------------------------------------- */}
       {subTab === 'users' && (
         <div>
@@ -804,18 +1235,9 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
               Manage educator profiles, role-based access control (Admin / Teacher), and security credentials.
             </p>
             <button
-              onClick={() => {
-                setUserForm({
-                  full_name: '',
-                  email: '',
-                  role: 'teacher',
-                  assigned_class: classesList[0]?.name || 'Grade 4',
-                  password: ''
-                });
-                setIsUserModalOpen(true);
-              }}
+              onClick={handleOpenAddUser}
               className="btn-primary"
-              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', backgroundColor: '#1E3A8A' }}
             >
               <Plus size={16} />
               <span>Create Staff Account</span>
@@ -840,15 +1262,15 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
                   return (
                     <tr key={u.id} style={{ borderBottom: '1px solid var(--border)' }}>
                       <td style={{ padding: '0.75rem 1rem', fontWeight: 600 }}>
-                        {u.name} {isSelf && <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 500 }}>(You)</span>}
+                        {u.name} {isSelf && <span style={{ fontSize: '0.75rem', color: '#1E3A8A', fontWeight: 500 }}>(You)</span>}
                       </td>
                       <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)' }}>{u.email}</td>
                       <td style={{ padding: '0.75rem 1rem' }}>
                         <span
                           className="badge"
                           style={{
-                            backgroundColor: u.role === 'admin' ? 'rgba(37, 99, 235, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-                            color: u.role === 'admin' ? 'var(--primary)' : 'var(--success)',
+                            backgroundColor: u.role === 'admin' ? 'rgba(30, 58, 138, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                            color: u.role === 'admin' ? '#1E3A8A' : 'var(--success)',
                             padding: '0.2rem 0.6rem',
                             borderRadius: '4px',
                             fontWeight: 600,
@@ -877,6 +1299,14 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
                         </span>
                       </td>
                       <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
+                        <button
+                          onClick={() => handleOpenEditUser(u)}
+                          className="btn-icon"
+                          title="Edit Staff Information"
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', marginRight: '0.5rem', color: '#1E3A8A' }}
+                        >
+                          <Edit2 size={16} />
+                        </button>
                         <button
                           onClick={() => {
                             setSelectedUserForReset(u);
@@ -910,13 +1340,432 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
       )}
 
       {/* --------------------------------------------------------------------- */}
-      {/* 4. Audit Trail Tab */}
+      {/* 5. WhatsApp Module Configuration Tab */}
+      {/* --------------------------------------------------------------------- */}
+      {subTab === 'whatsapp' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem' }}>
+          <form onSubmit={handleSaveWhatsappConfig} className="glass-card" style={{ padding: '2rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div>
+                <h2 style={{ fontSize: '1.2rem', fontWeight: 600, margin: 0, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <MessageSquare size={20} color="#1E3A8A" />
+                  Guardian WhatsApp Notification Module
+                </h2>
+                <p style={{ margin: '0.25rem 0 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                  Send individual manual WhatsApp notices from the attendance screen or configure automated Cloud API notifications.
+                </p>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem' }}>
+                <input
+                  type="checkbox"
+                  checked={whatsappConfig.whatsapp_enabled}
+                  onChange={(e) => setWhatsappConfig({ ...whatsappConfig, whatsapp_enabled: e.target.checked })}
+                  style={{ width: '18px', height: '18px', accentColor: '#1E3A8A' }}
+                />
+                <span>Enable WhatsApp Module</span>
+              </label>
+            </div>
+
+            <div style={{ padding: '1rem 1.25rem', backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 'var(--radius-md)', marginBottom: '1.5rem', fontSize: '0.85rem', color: '#1E40AF', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+              <Info size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
+              <div>
+                <strong>Offline-First Assurance:</strong> Manual WhatsApp notifications use universal deep links (`https://wa.me/`) that launch WhatsApp directly on your desktop or phone without requiring API tokens. Automated messaging requires an active internet connection and WhatsApp Cloud API credentials. Attendance recording always works 100% offline.
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem', marginBottom: '1.5rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.4rem' }}>
+                  Provider Integration
+                </label>
+                <select
+                  className="form-select"
+                  value={whatsappConfig.whatsapp_provider}
+                  onChange={(e) => setWhatsappConfig({ ...whatsappConfig, whatsapp_provider: e.target.value })}
+                  style={{ width: '100%' }}
+                >
+                  <option value="cloud_api">Meta WhatsApp Cloud API (Official)</option>
+                  <option value="simulated">Simulated / Offline Development Sandbox</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.4rem' }}>
+                  Phone Number ID (Cloud API)
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={whatsappConfig.whatsapp_phone_number_id}
+                  onChange={(e) => setWhatsappConfig({ ...whatsappConfig, whatsapp_phone_number_id: e.target.value })}
+                  placeholder="e.g. 104829103948"
+                  style={{ width: '100%' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.4rem' }}>
+                  Business Account ID (WABA)
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={whatsappConfig.whatsapp_business_account_id}
+                  onChange={(e) => setWhatsappConfig({ ...whatsappConfig, whatsapp_business_account_id: e.target.value })}
+                  placeholder="e.g. 209384019283"
+                  style={{ width: '100%' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.4rem' }}>
+                  Access Token {whatsappConfig.whatsapp_api_token_configured && <span style={{ color: 'var(--success)' }}>({whatsappConfig.whatsapp_api_token_preview})</span>}
+                </label>
+                <input
+                  type="password"
+                  className="form-input"
+                  value={whatsappConfig.whatsapp_api_token}
+                  onChange={(e) => setWhatsappConfig({ ...whatsappConfig, whatsapp_api_token: e.target.value })}
+                  placeholder={whatsappConfig.whatsapp_api_token_configured ? 'Token is configured (leave empty to keep)' : 'Paste System User Access Token'}
+                  style={{ width: '100%' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '1.5rem', borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--text-main)' }}>
+                Automated Attendance Triggers (Optional)
+              </h3>
+              <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={whatsappConfig.whatsapp_auto_notify_absent}
+                    onChange={(e) => setWhatsappConfig({ ...whatsappConfig, whatsapp_auto_notify_absent: e.target.checked })}
+                    style={{ width: '16px', height: '16px', accentColor: '#1E3A8A' }}
+                  />
+                  <span>Automatically notify guardians when student is marked <strong>Absent</strong></span>
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={whatsappConfig.whatsapp_auto_notify_late}
+                    onChange={(e) => setWhatsappConfig({ ...whatsappConfig, whatsapp_auto_notify_late: e.target.checked })}
+                    style={{ width: '16px', height: '16px', accentColor: '#1E3A8A' }}
+                  />
+                  <span>Automatically notify guardians when student arrives <strong>Late</strong></span>
+                </label>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.4rem', color: 'var(--text-main)' }}>
+                Absent Notification Message Template
+              </label>
+              <textarea
+                className="form-textarea"
+                rows={2}
+                value={whatsappConfig.whatsapp_template_absent}
+                onChange={(e) => setWhatsappConfig({ ...whatsappConfig, whatsapp_template_absent: e.target.value })}
+                style={{ width: '100%' }}
+              />
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Supported variables: <code>{'{student_name}'}</code>, <code>{'{class_name}'}</code>, <code>{'{date}'}</code>, <code>{'{school_name}'}</code>
+              </span>
+            </div>
+
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.4rem', color: 'var(--text-main)' }}>
+                Late Arrival Notification Message Template
+              </label>
+              <textarea
+                className="form-textarea"
+                rows={2}
+                value={whatsappConfig.whatsapp_template_late}
+                onChange={(e) => setWhatsappConfig({ ...whatsappConfig, whatsapp_template_late: e.target.value })}
+                style={{ width: '100%' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="submit"
+                className="btn-primary"
+                disabled={savingWhatsapp}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.5rem', backgroundColor: '#1E3A8A' }}
+              >
+                <Save size={18} />
+                <span>{savingWhatsapp ? 'Saving Configuration...' : 'Save WhatsApp Configuration'}</span>
+              </button>
+            </div>
+          </form>
+
+          {/* Test Dispatch Card */}
+          <div className="glass-card" style={{ padding: '1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Send size={18} color="#1E3A8A" />
+              Simulated & Live Notification Dispatch Sandbox
+            </h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+              Dispatch a verified test payload to a phone number. In test mode, this generates a simulated WAMID without communicating with live external WhatsApp servers.
+            </p>
+
+            <form onSubmit={handleSendTestWhatsapp} style={{ display: 'grid', gridTemplateColumns: '260px 1fr auto', gap: '1rem', alignItems: 'flex-end' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.3rem' }}>
+                  Recipient Phone (International E.164)
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="form-input"
+                  value={testPhoneInput}
+                  onChange={(e) => setTestPhoneInput(e.target.value)}
+                  placeholder="+1 (555) 000-1234"
+                  style={{ width: '100%' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.3rem' }}>
+                  Test Message Body
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="form-input"
+                  value={testMessageInput}
+                  onChange={(e) => setTestMessageInput(e.target.value)}
+                  style={{ width: '100%' }}
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="btn-secondary"
+                disabled={isTestingWhatsapp}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1.25rem' }}
+              >
+                <Send size={16} />
+                <span>{isTestingWhatsapp ? 'Dispatching...' : 'Dispatch Test'}</span>
+              </button>
+            </form>
+          </div>
+
+          {/* Notification Audit Log */}
+          <div className="glass-card" style={{ padding: '1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--text-main)' }}>
+              Recent Notification Audit Log
+            </h3>
+            <div className="table-container" style={{ borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--border)' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ background: 'var(--border-light)', borderBottom: '1px solid var(--border)' }}>
+                    <th style={{ padding: '0.6rem 0.8rem', fontSize: '0.8rem', fontWeight: 600 }}>Timestamp</th>
+                    <th style={{ padding: '0.6rem 0.8rem', fontSize: '0.8rem', fontWeight: 600 }}>Recipient Phone</th>
+                    <th style={{ padding: '0.6rem 0.8rem', fontSize: '0.8rem', fontWeight: 600 }}>Student</th>
+                    <th style={{ padding: '0.6rem 0.8rem', fontSize: '0.8rem', fontWeight: 600 }}>Mode</th>
+                    <th style={{ padding: '0.6rem 0.8rem', fontSize: '0.8rem', fontWeight: 600 }}>Status</th>
+                    <th style={{ padding: '0.6rem 0.8rem', fontSize: '0.8rem', fontWeight: 600 }}>Message Text</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {whatsappLogs.slice(0, 25).map((log) => (
+                    <tr key={log.id} style={{ borderBottom: '1px solid var(--border)', fontSize: '0.8rem' }}>
+                      <td style={{ padding: '0.6rem 0.8rem', whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>
+                        {log.created_at ? new Date(log.created_at).toLocaleString() : '—'}
+                      </td>
+                      <td style={{ padding: '0.6rem 0.8rem', fontWeight: 600 }}>{log.recipient_phone}</td>
+                      <td style={{ padding: '0.6rem 0.8rem' }}>{log.student_name || '—'}</td>
+                      <td style={{ padding: '0.6rem 0.8rem' }}>
+                        <span className="badge" style={{ fontSize: '0.75rem', backgroundColor: 'var(--border-light)' }}>
+                          {log.mode === 'manual_link' ? 'Manual Link' : 'Automated API'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '0.6rem 0.8rem' }}>
+                        <span
+                          className="badge"
+                          style={{
+                            backgroundColor: log.status === 'sent' || log.status === 'prepared' ? 'var(--success-bg)' : 'var(--danger-bg)',
+                            color: log.status === 'sent' || log.status === 'prepared' ? 'var(--success)' : 'var(--danger)',
+                            fontSize: '0.75rem'
+                          }}
+                        >
+                          {log.status}
+                        </span>
+                      </td>
+                      <td style={{ padding: '0.6rem 0.8rem', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {log.message_text}
+                      </td>
+                    </tr>
+                  ))}
+                  {whatsappLogs.length === 0 && (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
+                        No WhatsApp notifications logged yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --------------------------------------------------------------------- */}
+      {/* 6. Database Storage & Backups Tab */}
+      {/* --------------------------------------------------------------------- */}
+      {subTab === 'storage' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem' }}>
+          {/* Storage Overview Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
+            <div className="card" style={{ padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '0.4rem' }}>
+                <Database size={16} />
+                <span>Primary SQLite Database</span>
+              </div>
+              <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                {storageInfo?.database_size_display || '—'}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.3rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={storageInfo?.database_path}>
+                Path: {storageInfo?.database_path || '—'}
+              </div>
+            </div>
+
+            <div className="card" style={{ padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '0.4rem' }}>
+                <HardDrive size={16} />
+                <span>Disk Storage Space Free</span>
+              </div>
+              <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#059669' }}>
+                {storageInfo?.disk_free_display || '—'}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
+                Local hard disk capacity for backups & records
+              </div>
+            </div>
+
+            <div className="card" style={{ padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '0.4rem' }}>
+                <CheckCircle size={16} />
+                <span>Verified Backups</span>
+              </div>
+              <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#1E3A8A' }}>
+                {storageInfo?.backup_count || 0} Backups
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
+                Total archive size: {storageInfo?.total_backup_size_display || '0 KB'}
+              </div>
+            </div>
+          </div>
+
+          {/* Backup Management Card */}
+          <div className="glass-card" style={{ padding: '1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <HardDrive size={18} color="#1E3A8A" />
+                  Database Backup Archives & Safe Point-in-Time Recovery
+                </h3>
+                <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  Backups are verified with SHA-256 cryptographic hashes and SQLite integrity checks. Restoring creates an automatic safety snapshot first.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handleCreateBackup}
+                disabled={isBackingUp}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 1.25rem', backgroundColor: '#1E3A8A' }}
+              >
+                <Plus size={16} />
+                <span>{isBackingUp ? 'Creating Verified Backup...' : 'Create Verified Backup Now'}</span>
+              </button>
+            </div>
+
+            <div className="table-container" style={{ borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--border)' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ background: 'var(--border-light)', borderBottom: '1px solid var(--border)' }}>
+                    <th style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', fontWeight: 600 }}>Backup Filename</th>
+                    <th style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', fontWeight: 600 }}>Created Timestamp</th>
+                    <th style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', fontWeight: 600 }}>Archive Size</th>
+                    <th style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', fontWeight: 600 }}>Cryptographic Integrity</th>
+                    <th style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', fontWeight: 600, textAlign: 'right' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {storageInfo?.backups?.map((bk) => (
+                    <tr key={bk.filename} style={{ borderBottom: '1px solid var(--border)', fontSize: '0.85rem' }}>
+                      <td style={{ padding: '0.75rem 1rem', fontWeight: 600, fontFamily: 'monospace' }}>
+                        {bk.filename}
+                      </td>
+                      <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)' }}>
+                        {bk.created_at ? new Date(bk.created_at).toLocaleString() : '—'}
+                      </td>
+                      <td style={{ padding: '0.75rem 1rem' }}>{bk.size_display}</td>
+                      <td style={{ padding: '0.75rem 1rem' }}>
+                        <span
+                          className="badge"
+                          style={{
+                            backgroundColor: bk.verified ? 'var(--success-bg)' : 'var(--danger-bg)',
+                            color: bk.verified ? 'var(--success)' : 'var(--danger)',
+                            padding: '0.2rem 0.5rem',
+                            borderRadius: '4px',
+                            fontSize: '0.8rem'
+                          }}
+                        >
+                          {bk.verified ? 'Verified (SHA-256 Valid)' : 'Corrupted / Check Failed'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
+                        <button
+                          type="button"
+                          className="btn-secondary btn-sm"
+                          onClick={() => handleRestoreBackup(bk.filename)}
+                          disabled={isRestoring || !bk.verified}
+                          style={{ marginRight: '0.5rem', fontSize: '0.8rem', padding: '0.3rem 0.6rem' }}
+                          title="Restore live database from this verified snapshot"
+                        >
+                          Restore
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-icon"
+                          onClick={() => handleDeleteBackup(bk.filename)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)' }}
+                          title="Delete backup archive"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {(!storageInfo?.backups || storageInfo.backups.length === 0) && (
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                        No backup archives created yet. Click "Create Verified Backup Now" to capture an initial snapshot.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --------------------------------------------------------------------- */}
+      {/* 7. Security Audit Trail Tab */}
       {/* --------------------------------------------------------------------- */}
       {subTab === 'audit' && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', gap: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', gap: '1rem', flexWrap: 'wrap' }}>
             <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-              Immutable system audit trail: attendance corrections, administrative changes, logins, and overrides.
+              Immutable system audit trail: attendance corrections, administrative changes, logins, backups, and overrides.
             </p>
             <input
               type="text"
@@ -935,7 +1784,7 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
                   <th style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', fontWeight: 600 }}>Timestamp</th>
                   <th style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', fontWeight: 600 }}>Action</th>
                   <th style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', fontWeight: 600 }}>Target Entity</th>
-                  <th style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', fontWeight: 600 }}>Actor ID</th>
+                  <th style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', fontWeight: 600 }}>Actor</th>
                   <th style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', fontWeight: 600 }}>Event Payload / Reason</th>
                 </tr>
               </thead>
@@ -949,8 +1798,8 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
                       <span
                         className="badge"
                         style={{
-                          backgroundColor: ev.action.includes('correction') || ev.action.includes('reset') ? 'var(--warning-bg)' : 'var(--primary-light)',
-                          color: ev.action.includes('correction') || ev.action.includes('reset') ? 'var(--warning)' : 'var(--primary)',
+                          backgroundColor: ev.action.includes('correction') || ev.action.includes('reset') || ev.action.includes('restore') ? 'var(--warning-bg)' : 'rgba(30, 58, 138, 0.12)',
+                          color: ev.action.includes('correction') || ev.action.includes('reset') || ev.action.includes('restore') ? 'var(--warning)' : '#1E3A8A',
                           padding: '0.15rem 0.5rem',
                           borderRadius: '4px',
                           fontWeight: 600
@@ -994,34 +1843,32 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
         title={editingClass ? `Edit Class: ${editingClass.name} - Section ${editingClass.section}` : 'Create Academic Class'}
       >
         <form onSubmit={handleSaveClass}>
-          {!editingClass && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.4rem' }}>Class / Grade *</label>
-                <input
-                  type="text"
-                  required
-                  className="form-input"
-                  value={classForm.name}
-                  onChange={(e) => setClassForm({ ...classForm, name: e.target.value })}
-                  placeholder="e.g. Grade 6"
-                  style={{ width: '100%' }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.4rem' }}>Section *</label>
-                <input
-                  type="text"
-                  required
-                  className="form-input"
-                  value={classForm.section}
-                  onChange={(e) => setClassForm({ ...classForm, section: e.target.value })}
-                  placeholder="e.g. A"
-                  style={{ width: '100%' }}
-                />
-              </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.4rem' }}>Class / Grade *</label>
+              <input
+                type="text"
+                required
+                className="form-input"
+                value={classForm.name}
+                onChange={(e) => setClassForm({ ...classForm, name: e.target.value })}
+                placeholder="e.g. Grade 6"
+                style={{ width: '100%' }}
+              />
             </div>
-          )}
+            <div>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.4rem' }}>Section *</label>
+              <input
+                type="text"
+                required
+                className="form-input"
+                value={classForm.section}
+                onChange={(e) => setClassForm({ ...classForm, section: e.target.value })}
+                placeholder="e.g. A"
+                style={{ width: '100%' }}
+              />
+            </div>
+          </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
             <div>
@@ -1073,16 +1920,88 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
             <button type="button" onClick={() => setIsClassModalOpen(false)} className="btn-secondary">
               Cancel
             </button>
-            <button type="submit" className="btn-primary">
-              {editingClass ? 'Update Class' : 'Create Class'}
+            <button type="submit" className="btn-primary" style={{ backgroundColor: '#1E3A8A' }}>
+              {editingClass ? 'Update Class & Synchronize Roster' : 'Create Class'}
             </button>
           </div>
         </form>
       </Modal>
 
-      {/* Create Staff Account Modal */}
-      <Modal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} title="Create Educator / Staff Account">
-        <form onSubmit={handleCreateUser}>
+      {/* Add / Edit Academic Term Modal */}
+      <Modal
+        isOpen={isTermModalOpen}
+        onClose={() => setIsTermModalOpen(false)}
+        title={editingTerm ? `Edit Term: ${editingTerm.name}` : 'Create Academic Calendar Term'}
+      >
+        <form onSubmit={handleSaveTerm}>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.4rem' }}>Term Name *</label>
+            <input
+              type="text"
+              required
+              className="form-input"
+              value={termForm.name}
+              onChange={(e) => setTermForm({ ...termForm, name: e.target.value })}
+              placeholder="e.g. Fall 2026 Term"
+              style={{ width: '100%' }}
+            />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.4rem' }}>Start Date *</label>
+              <input
+                type="date"
+                required
+                className="form-input"
+                value={termForm.start_date}
+                onChange={(e) => setTermForm({ ...termForm, start_date: e.target.value })}
+                style={{ width: '100%' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.4rem' }}>End Date *</label>
+              <input
+                type="date"
+                required
+                className="form-input"
+                value={termForm.end_date}
+                onChange={(e) => setTermForm({ ...termForm, end_date: e.target.value })}
+                style={{ width: '100%' }}
+              />
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}>
+              <input
+                type="checkbox"
+                checked={termForm.is_active}
+                onChange={(e) => setTermForm({ ...termForm, is_active: e.target.checked })}
+                style={{ width: '16px', height: '16px', accentColor: '#1E3A8A' }}
+              />
+              <span>Set as active instructional term</span>
+            </label>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+            <button type="button" onClick={() => setIsTermModalOpen(false)} className="btn-secondary">
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" style={{ backgroundColor: '#1E3A8A' }}>
+              {editingTerm ? 'Update Term' : 'Create Term'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Create / Edit Staff Account Modal */}
+      <Modal
+        isOpen={isUserModalOpen}
+        onClose={() => setIsUserModalOpen(false)}
+        title={editingUser ? `Edit Staff Member: ${editingUser.name}` : 'Create Educator / Staff Account'}
+      >
+        <form onSubmit={handleSaveUser}>
           <div style={{ marginBottom: '1rem' }}>
             <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.4rem' }}>Full Name *</label>
             <input
@@ -1126,41 +2045,47 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
             {userForm.role === 'teacher' && (
               <div>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.4rem' }}>Assigned Class *</label>
-                <input
-                  type="text"
-                  required
-                  className="form-input"
+                <select
+                  className="form-select"
                   value={userForm.assigned_class}
                   onChange={(e) => setUserForm({ ...userForm, assigned_class: e.target.value })}
-                  placeholder="e.g. Grade 4"
                   style={{ width: '100%' }}
-                />
+                >
+                  {classesList.map((c) => (
+                    <option key={c.id} value={c.name}>
+                      {c.name} (Section {c.section})
+                    </option>
+                  ))}
+                  {classesList.length === 0 && <option value="Grade 4">Grade 4</option>}
+                </select>
               </div>
             )}
           </div>
 
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.4rem' }}>Initial Password *</label>
-            <input
-              type="password"
-              required
-              className="form-input"
-              value={userForm.password}
-              onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
-              placeholder="Minimum 12 chars (letters + numbers)"
-              style={{ width: '100%' }}
-            />
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              Must contain at least 12 characters, including letters and numbers.
-            </span>
-          </div>
+          {!editingUser && (
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.4rem' }}>Initial Password *</label>
+              <input
+                type="password"
+                required
+                className="form-input"
+                value={userForm.password}
+                onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+                placeholder="Minimum 12 chars (letters + numbers)"
+                style={{ width: '100%' }}
+              />
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Must contain at least 12 characters, including letters and numbers.
+              </span>
+            </div>
+          )}
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
             <button type="button" onClick={() => setIsUserModalOpen(false)} className="btn-secondary">
               Cancel
             </button>
-            <button type="submit" className="btn-primary">
-              Create Account
+            <button type="submit" className="btn-primary" style={{ backgroundColor: '#1E3A8A' }}>
+              {editingUser ? 'Update Staff Info' : 'Create Account'}
             </button>
           </div>
         </form>

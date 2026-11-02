@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify
 from db import db
 from phase1_students.models import Student
@@ -66,12 +67,20 @@ def create_student():
             'error': f"Roll number '{roll_number}' already exists in {class_name} (Section {section})."
         }), 409
 
+    whatsapp_consent = bool(data.get('whatsapp_consent', False))
     student = Student(
         roll_number=roll_number,
         full_name=full_name,
         class_name=class_name,
         section=section,
         guardian_contact=str(data.get('guardian_contact', '')).strip() or None,
+        guardian_name=str(data.get('guardian_name', '')).strip() or '',
+        guardian_relationship=str(data.get('guardian_relationship', 'Guardian')).strip() or 'Guardian',
+        whatsapp_number=str(data.get('whatsapp_number', '')).strip() or '',
+        whatsapp_consent=whatsapp_consent,
+        whatsapp_consent_date=datetime.now(timezone.utc).replace(tzinfo=None) if whatsapp_consent else None,
+        whatsapp_opt_out=bool(data.get('whatsapp_opt_out', False)),
+        notification_preferences=str(data.get('notification_preferences', 'attendance')).strip() or 'attendance',
         enrollment_date=enrollment_date,
         photo_path=str(data.get('photo_path', '')).strip() or None,
         notes=str(data.get('notes', '')).strip() or None,
@@ -143,6 +152,21 @@ def update_student(student_id):
     student.class_name = class_name
     student.section = section
     student.guardian_contact = str(data.get('guardian_contact', student.guardian_contact or '')).strip() or None
+    if 'guardian_name' in data:
+        student.guardian_name = str(data['guardian_name']).strip()
+    if 'guardian_relationship' in data:
+        student.guardian_relationship = str(data['guardian_relationship']).strip() or 'Guardian'
+    if 'whatsapp_number' in data:
+        student.whatsapp_number = str(data['whatsapp_number']).strip()
+    if 'whatsapp_consent' in data:
+        new_consent = bool(data['whatsapp_consent'])
+        if new_consent and not student.whatsapp_consent:
+            student.whatsapp_consent_date = datetime.now(timezone.utc).replace(tzinfo=None)
+        student.whatsapp_consent = new_consent
+    if 'whatsapp_opt_out' in data:
+        student.whatsapp_opt_out = bool(data['whatsapp_opt_out'])
+    if 'notification_preferences' in data:
+        student.notification_preferences = str(data['notification_preferences']).strip() or 'attendance'
     student.enrollment_date = str(data.get('enrollment_date', student.enrollment_date)).strip()
     student.photo_path = str(data.get('photo_path', student.photo_path or '')).strip() or None
     student.notes = str(data.get('notes', student.notes or '')).strip() or None

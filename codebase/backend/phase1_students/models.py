@@ -10,6 +10,13 @@ class Student(db.Model):
     class_name = db.Column(db.String(50), nullable=False)
     section = db.Column(db.String(20), nullable=False, default='A')
     guardian_contact = db.Column(db.String(50), nullable=True)
+    guardian_name = db.Column(db.String(100), nullable=True, default='')
+    guardian_relationship = db.Column(db.String(50), nullable=True, default='Guardian')
+    whatsapp_number = db.Column(db.String(30), nullable=True, default='')
+    whatsapp_consent = db.Column(db.Boolean, default=False, nullable=False)
+    whatsapp_consent_date = db.Column(db.DateTime, nullable=True)
+    whatsapp_opt_out = db.Column(db.Boolean, default=False, nullable=False)
+    notification_preferences = db.Column(db.String(50), default='attendance', nullable=False)
     enrollment_date = db.Column(db.String(20), nullable=False)
     photo_path = db.Column(db.String(255), nullable=True)
     notes = db.Column(db.Text, nullable=True)
@@ -29,6 +36,13 @@ class Student(db.Model):
             'class_name': self.class_name,
             'section': self.section,
             'guardian_contact': self.guardian_contact or '',
+            'guardian_name': self.guardian_name or '',
+            'guardian_relationship': self.guardian_relationship or 'Guardian',
+            'whatsapp_number': self.whatsapp_number or '',
+            'whatsapp_consent': bool(self.whatsapp_consent),
+            'whatsapp_consent_date': self.whatsapp_consent_date.isoformat() if self.whatsapp_consent_date else None,
+            'whatsapp_opt_out': bool(self.whatsapp_opt_out),
+            'notification_preferences': self.notification_preferences or 'attendance',
             'enrollment_date': self.enrollment_date,
             'photo_path': self.photo_path or '',
             'notes': self.notes or '',

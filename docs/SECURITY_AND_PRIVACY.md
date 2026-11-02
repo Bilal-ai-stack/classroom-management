@@ -1,8 +1,8 @@
-# Security & Privacy Architecture — ClassroomOS 2.0
+# Security & Privacy Architecture — ClassroomOS 2.1
 
 **Classification:** Official Product Documentation  
-**Product:** ClassroomOS 2.0 (Windows Desktop Release)  
-**Applicability:** Version 2.0.0+  
+**Product:** ClassroomOS 2.1 (Windows Desktop Release)  
+**Applicability:** Version 2.0.0, 2.1.0+  
 **Standard Compliance:** Local-First FERPA Compliance, GDPR-K Privacy Guardrails, Zero-Biometric Identification Policy
 
 ---
@@ -155,3 +155,23 @@ To allow schools to customize their software without introducing Remote Code Exe
 2. **Backups to Air-Gapped Media:** Periodically export database backups (`%LOCALAPPDATA%\ClassroomOS\backups`) to an external encrypted USB drive or secured network share.
 3. **Workstation Screen Lock:** Configure Windows to automatically lock after 5 minutes of inactivity to protect teacher sessions in shared classrooms.
 4. **Operating System Patches:** Maintain the host Windows machine with current Windows Defender / security definitions.
+
+---
+
+## 8. Guardian PII, Consent & WhatsApp Messaging Security
+
+ClassroomOS 2.1 introduces student guardian communications with rigorous privacy guardrails:
+
+### 8.1 Consent & Opt-Out Enforcement
+- **Explicit Consent Tracking:** Each student record tracks `whatsapp_consent` (boolean), `whatsapp_consent_date` (timestamp), and `whatsapp_opt_out` (boolean).
+- **Opt-Out Precedence:** If a guardian opts out, manual preview modals display prominent opt-out notices and automated dispatches are rejected.
+- **E.164 Phone Sanitization:** Phone numbers are validated against standard international formats (`^\+[1-9]\d{7,14}$`), preventing injection of malformed deep links.
+
+### 8.2 Client-Side Deep Links (`wa.me`)
+- **No Third-Party Intermediaries:** Manual WhatsApp notices are generated as standard `https://wa.me/<number>?text=<encoded_text>` deep links.
+- **Teacher Confirmation:** Messages are not silently dispatched behind the scenes; the teacher opens WhatsApp, reviews the content, and initiates sending.
+- **Audit Logging:** Clicking "Confirm Sent" records the dispatch timestamp, recipient, and message preview locally in SQLite for administrative review.
+
+### 8.3 Safe Backup Restoration & Storage Isolation
+- **SHA-256 Manifest Verification:** Backups generated in `%LOCALAPPDATA%\ClassroomOS\data\backups` include cryptographic SHA-256 hashes.
+- **Automated Pre-Restore Safety Snapshots:** Restoring a previous backup automatically triggers a snapshot of the live database prior to restoration, ensuring no accidental administrative overwrite is irreversible.

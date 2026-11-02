@@ -207,6 +207,48 @@ def create_user():
     return jsonify({'success': True, 'user': user.public_dict()}), 201
 
 
+@auth_bp.route('/auth/users/<int:user_id>', methods=['PUT'])
+@auth_bp.route('/admin/users/<int:user_id>', methods=['PUT'])
+@require_roles('admin')
+def update_user(user_id):
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({'success': False, 'error': 'User not found.'}), 404
+    data = request.get_json() or {}
+    full_name = str(data.get('full_name', user.full_name)).strip()
+    email = str(data.get('email', user.email)).strip().lower()
+    role = str(data.get('role', user.role)).strip().lower()
+    assigned_class = str(data.get('assigned_class', user.assigned_class or '')).strip() or None
+
+    if not full_name or not email or '@' not in email or role not in VALID_ROLES:
+        return jsonify({'success': False, 'error': 'Valid full name, email, and role are required.'}), 400
+
+    if role == 'teacher' and not assigned_class:
+        return jsonify({'success': False, 'error': 'Teachers must be assigned to a class.'}), 400
+
+    if email != user.email:
+        existing = User.query.filter_by(email=email).first()
+        if existing and existing.id != user.id:
+            return jsonify({'success': False, 'error': 'An account with this email already exists.'}), 409
+
+    # Prevent an admin from demoting themselves if they are the sole active admin
+    if user.id == request.current_user.id and role != 'admin':
+        active_admins = User.query.filter_by(role='admin', is_active=True).count()
+        if active_admins <= 1:
+            return jsonify({'success': False, 'error': 'Cannot change role of the sole active administrator.'}), 400
+
+    old_data = user.public_dict()
+    user.full_name = full_name
+    user.email = email
+    user.role = role
+    user.assigned_class = assigned_class if role == 'teacher' else None
+    user.updated_at = utcnow()
+
+    record_audit('user.update', 'user', user.id, {'previous': old_data, 'updated': user.public_dict()}, request.current_user.id)
+    db.session.commit()
+    return jsonify({'success': True, 'message': 'User account updated successfully.', 'user': user.public_dict()}), 200
+
+
 @auth_bp.route('/auth/users/<int:user_id>/reset-password', methods=['POST'])
 @require_roles('admin')
 def reset_password(user_id):
