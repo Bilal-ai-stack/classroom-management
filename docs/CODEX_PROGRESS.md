@@ -1,6 +1,6 @@
-# Codex Progress — Classroom Management System 2.1
+# Codex Progress — Classroom Management System 2.1.1
 
-## Milestone status (2026-11-01)
+## Milestone status (2026-11-02)
 
 | Milestone | Status | Evidence |
 |---|---|---|
@@ -21,78 +21,70 @@
 | Storage Panel, Backups & Restoration | Implemented and tested | Database file size, backup storage volume, disk free space metrics, on-demand backups with SHA-256 manifests, point-in-time restore with automated safety snapshots |
 | Guardian WhatsApp Notification Module | Implemented and tested | Guardian profile fields, international E.164 phone validation, consent tracking, manual preview dispatch modal with attendance templates, automated Cloud API config & simulation sandbox |
 | Mobile & PWA Offline Readiness | Implemented and tested | `manifest.webmanifest`, `sw.js` cache-first service worker, network-only API routing, real-time offline status banner |
-| Community Distribution & Packaging | Implemented and tested | PyInstaller native Windows standalone exe, Inno Setup installer (`ClassroomOS-Setup-2.1.0.exe`), portable ZIP (`ClassroomOS-v2.1.0-Portable-Windows.zip`), SHA256SUMS.txt, product landing website (`virtualgoal.com/classroomos`) |
-| Production Release Verification (v2.1.0) | Completed | 97/97 backend tests pass (39.81s), 6/6 Playwright viewports pass, 0 lint errors, clean installer verified |
+| Community Distribution & Packaging (v2.1.0) | Completed | PyInstaller native Windows standalone exe, Inno Setup installer (`ClassroomOS-Setup-2.1.0.exe`), portable ZIP (`ClassroomOS-v2.1.0-Portable-Windows.zip`) |
+| **Student Photo Persistence Lifecycle (v2.1.1)** | **Implemented and tested** | Multipart enrollment photo upload, portfolio modal upload/replace/delete, Pillow image validation (JPG/PNG/WEBP, max 5MB, 1024px normalization, auto-orientation), in-memory `io.BytesIO` streaming (zero Windows file locking), fallback SVG avatar, zero SQLite image binary bloat |
+| **Complete C: and D: Storage Management (v2.1.1)** | **Implemented and tested** | Inno Setup interactive data directory selection (`D:\ClassroomOSData`), `storage_manager.py` with multi-tier resolution (env var -> `storage_config.json` -> registry -> AppData), comprehensive storage metrics, low-disk warnings (<500MB), atomic verified migration with rollback, persistent user data preservation |
+| **Professional Windows Launching (v2.1.1)** | **Implemented and tested** | PyInstaller windowed GUI subsystem (`console=False`), zero Command Prompt window on launch, `SafeOutputLogger` redirecting stdout/stderr to `<DATA_DIR>/logs/launcher.log`, native Windows MessageBox error dialogs, loopback server readiness polling, loopback shutdown endpoint `POST /api/system/shutdown`, in-app Exit button |
+| **Production Release Verification (v2.1.1)** | **Completed** | 104/104 backend tests pass (71.2s), Playwright photo and storage E2E test passes 100%, clean install and lifecycle test passes 100%, packaged binary test passes 100% |
 
 ---
 
-## Release Execution Batch — v2.1.0 (2026-11-01)
+## Release Execution Batch — v2.1.1 (2026-11-02)
 
-### Migration 6 — Institution Enhancements, Academic Terms & Guardian WhatsApp
-- **`institution_settings`:** Added `description`, `whatsapp_enabled`, `whatsapp_phone_number_id`, `whatsapp_access_token`, `whatsapp_template_absent`, `whatsapp_template_late`.
-- **`students`:** Added `guardian_name`, `guardian_relationship`, `whatsapp_number`, `whatsapp_consent`, `whatsapp_consent_date`, `whatsapp_opt_out`, `notification_preferences`.
-- **`whatsapp_notifications`:** Added tracking table for dispatches, status, and audit records.
-- Incremented schema version to 6; `test_database_reliability.py` asserts `current_schema_version == 6`.
+### 1. Student Photograph Persistence Architecture
+- Implemented `validate_and_process_photo` in `codebase/backend/phase1_students/routes.py`:
+  - Enforced JPEG, PNG, WEBP whitelist.
+  - 5 MB maximum file size limit.
+  - Decompression bomb protection.
+  - Auto-orientation via `ImageOps.exif_transpose`.
+  - Max dimension downscaling to 1024px.
+  - In-memory `io.BytesIO` buffer response in `GET /api/students/<id>/photo` to eliminate Windows file locking `[WinError 32]`.
+- Updated `POST /api/students` to support `multipart/form-data` for instant photo enrollment.
+- Implemented `POST /api/students/<id>/photo` and `DELETE /api/students/<id>/photo` with audit logging.
+- Integrated photo picker with live preview in Add/Edit student modals and Student Portfolio in `App.jsx`.
 
-### Backend Enhancements & APIs
-- `codebase/backend/phase4_quality/admin_routes.py`:
-  - `GET /api/institution/profile` and `PUT /api/admin/institution`: Complete institution profile editing including description.
-  - `PUT /api/admin/classes/<id>`: Class and section renaming with automated student enrollment and attendance session synchronization.
-  - `PUT /api/admin/terms/<id>` & `DELETE /api/admin/terms/<id>`: Full academic term lifecycle management.
-  - `GET /api/admin/storage`: Real-time storage metrics (DB size, backup size, disk free space via `shutil.disk_usage`).
-  - `POST /api/admin/backups`: On-demand verified SQLite snapshot creation with SHA-256 manifest.
-  - `POST /api/admin/backups/restore`: Point-in-time database restoration with automated pre-restore safety snapshot.
-  - `DELETE /api/admin/backups/<filename>`: Authenticated backup archive deletion with audit logging.
-  - `GET /api/admin/whatsapp/config` & `PUT /api/admin/whatsapp/config`: Cloud API credential and template configuration.
-  - `POST /api/admin/whatsapp/test-message`: Safe simulated sandbox dispatch testing.
-  - `GET /api/admin/whatsapp/logs` & `POST /api/whatsapp/manual-log`: Full notification logging for manual and automated dispatches.
-- `codebase/backend/phase4_quality/auth.py`:
-  - `PUT /api/auth/users/<id>`: Complete staff account editing (full name, email, role, assigned class/section, active status) with RBAC checks and audit trail.
-- `codebase/backend/phase1_students/routes.py`:
-  - Integrated guardian contact, international phone format, consent status, and preference fields into student registration and profile updates.
+### 2. Complete C: and D: Drive Storage Management
+- Created `codebase/backend/storage_manager.py`:
+  - `resolve_data_directory()`: Multi-tier resolution (env `CLASSROOM_DATA_DIR` -> `storage_config.json` -> Registry `HKCU\Software\ClassroomOS\DataDir` -> `%LOCALAPPDATA%\ClassroomOS\data`).
+  - `ensure_storage_directories()`: Guarantees creation of `photos/students/`, `branding/`, `backups/`, `logs/`.
+  - `get_detailed_storage_metrics()`: Accurately calculates DB size, student photos count and size, backups count and size, total application data, and available host drive disk space.
+  - `migrate_data_directory()`: Atomically relocates data directory, verifies SQLite integrity and SHA-256 hash, and updates configuration.
+- Updated `packaging/ClassroomOS.iss`:
+  - Added custom page `CreateInputDirPage` for persistent data directory selection during installation.
+  - Generates `{app}\storage_config.json` and records Windows Registry entry.
+  - Preserves data directory completely upon uninstallation.
 
-### Frontend Modernization & Offline Resilience
-- `codebase/frontend/src/pages/AdminSettings.jsx`: Overhauled into 7 modular, tabbed cards (`institution`, `classes`, `terms`, `users`, `whatsapp`, `storage`, `audit`) with full field editability, reset buttons, and loading states.
-- `codebase/frontend/src/App.jsx`:
-  - Integrated Guardian Information into Add/Edit Student modals and Student Portfolio views.
-  - Added *Send WhatsApp* action buttons on Daily Attendance roster and Student directory.
-  - Implemented the Manual WhatsApp Notification Preview Modal with template selection (`Absent Today`, `Late Arrival`, `General Notice`), live token interpolation (`{student_name}`, `{date}`, `{school_name}`), and secure `wa.me` deep-link launching.
-  - Added real-time non-intrusive offline status banner tracking `navigator.onLine`.
-- `codebase/frontend/src/index.css`: Replaced external Google Fonts with local system typography stack; established institutional navy theme tokens.
-- `codebase/frontend/public/manifest.webmanifest` & `public/sw.js`: PWA configuration and resilient service worker.
-
-### Product Landing Website
-- `website/index.html`: High-performance, responsive product landing page for `virtualgoal.com/classroomos` featuring hero, value proposition, feature grid, offline manifesto, Windows download links, system specs, SHA-256 verification instructions, and FAQ.
+### 3. Professional Windows Launching Experience
+- Updated `ClassroomOS.spec` and `build-release.ps1` with `console=False` and `--windowed`.
+- Added `SafeOutputLogger` in `codebase/backend/launcher.py` redirecting outputs to `<DATA_DIR>/logs/launcher.log`.
+- Added native Windows MessageBox dialogs for critical startup failures.
+- Added loopback server readiness polling (`waitForServer`) before launching browser.
+- Added loopback `POST /api/system/shutdown` and Navbar "Exit" button in `App.jsx`.
 
 ---
 
 ## Verification & Quality Results
 
 ```powershell
-# Backend Test Suite
+# 1. Full Backend Test Suite
 cd codebase/backend
 .\venv\Scripts\python.exe -m pytest -v
-# Result: 97 passed, 0 failed in 39.81s
+# Result: 104 passed in 71.2s (100% pass)
 
-# Playwright Responsive Viewport Matrix (320px to 1920px)
-node codebase/frontend/e2e-responsive.mjs
-# Result: 6/6 viewports passed with ZERO horizontal overflow
+# 2. Playwright Photo Persistence & Storage E2E Test
+node codebase/frontend/e2e-photo-storage-test.mjs
+# Result: 6/6 steps passed (100% pass)
 
-# Frontend Linting
-cd codebase/frontend
-npm run lint
-# Result: 0 errors, 0 warnings
+# 3. Windows Clean Install & Lifecycle Verification
+powershell -ExecutionPolicy Bypass -File .\test-clean-install.ps1
+# Result: 7/7 steps passed (100% pass), database & secrets preserved after uninstall
 
-# Frontend Production Build
-npm run build
-# Result: Built in 1.57s (dist/index.html, dist/assets/*)
-
-# Release Packaging Pipeline
-powershell -ExecutionPolicy Bypass -File build-release.ps1
-# Result: Exit code 0, generated ClassroomOS-Setup-2.1.0.exe, ClassroomOS-v2.1.0-Portable-Windows.zip, SHA256SUMS.txt
+# 4. Packaged Standalone Application Playwright Test
+node codebase/frontend/e2e-packaged-admin-test.mjs
+# Result: 11/11 steps passed (100% pass), zero fetch loops, restart persistence verified
 ```
 
 ---
 
 ## Final Status
-**ALL V2.1.0 ENHANCEMENT DELIVERABLES COMPLETED AND VERIFIED. READY FOR COMMUNITY RELEASE.**
+**ALL V2.1.1 USABILITY AND PACKAGING ENHANCEMENTS COMPLETED AND FULLY VERIFIED. READY FOR COMMUNITY RELEASE.**

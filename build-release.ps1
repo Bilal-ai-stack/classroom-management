@@ -8,7 +8,7 @@ $FrontendDir = Join-Path $ProjectRoot "codebase\frontend"
 $BackendDir = Join-Path $ProjectRoot "codebase\backend"
 $DistReleaseDir = Join-Path $ProjectRoot "dist_release"
 $DistInstallerDir = Join-Path $ProjectRoot "dist_installer"
-$Version = "2.1.0"
+$Version = "2.1.1"
 
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host "  ClassroomOS v$Version -- Release Build Pipeline" -ForegroundColor Cyan
@@ -51,7 +51,7 @@ if (Test-Path $pyinstallerExe) {
     Write-Host "Running PyInstaller compilation..." -ForegroundColor Cyan
     Push-Location $BackendDir
     try {
-        & $pyinstallerExe --name ClassroomOS --noconfirm --onedir --clean --collect-all cv2 --collect-all PIL launcher.py
+        & $pyinstallerExe --noconfirm --clean ClassroomOS.spec
     } finally {
         Pop-Location
     }

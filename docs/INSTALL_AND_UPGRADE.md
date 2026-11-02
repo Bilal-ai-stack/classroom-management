@@ -1,4 +1,4 @@
-# ClassroomOS 2.1.0 — Installation, Deployment & Upgrade Guide
+# ClassroomOS 2.1.1 — Installation, Deployment & Upgrade Guide
 
 ## 1. System Requirements
 
@@ -14,61 +14,85 @@
 ## 2. Windows Installation Options
 
 ### Option A: Inno Setup Windows Installer (Recommended)
-1. Download and run `dist_release/ClassroomOS-Setup-2.1.0.exe`.
-2. Select your user installation directory (defaults to `%LOCALAPPDATA%\Programs\ClassroomOS`).
-3. Check the option to create a Desktop icon if desired.
-4. Click **Install**. The installer deploys the standalone runtime (`ClassroomOS.exe` + embedded Python 3.14 + OpenCV + React SPA).
-5. Click **Finish**. ClassroomOS launches automatically in your default browser at `http://127.0.0.1:5000`.
-6. To launch subsequently, use the Desktop icon or Windows Start Menu entry **ClassroomOS**.
+1. Download and run `dist_release/ClassroomOS-Setup-2.1.1.exe`.
+2. **Select Program Installation Folder:** Choose where program binaries reside (e.g. `C:\Users\<User>\AppData\Local\Programs\ClassroomOS` or `D:\Programs\ClassroomOS`).
+3. **Select Persistent Application Data Directory:** Choose where your persistent database, student photographs, and backups will reside (e.g. `D:\ClassroomOSData` or the default `%LOCALAPPDATA%\ClassroomOS\data`).
+4. Check the option to create a Desktop icon if desired.
+5. Click **Install**. The installer deploys the standalone runtime (`ClassroomOS.exe` + embedded Python 3.14 + OpenCV + React SPA) and configures your storage directory.
+6. Click **Finish**. ClassroomOS launches automatically in your default browser at `http://127.0.0.1:5000` through a clean graphical windowed experience without an exposed Command Prompt window.
+7. To launch subsequently, use the Desktop icon or Windows Start Menu entry **ClassroomOS**.
 
 ### Option B: Standalone Portable ZIP Edition
-1. Download `dist_release/ClassroomOS-v2.1.0-Portable-Windows.zip`.
-2. Extract the archive to any folder (e.g. `C:\ClassroomOS`, a USB drive, or an air-gapped machine).
+1. Download `dist_release/ClassroomOS-v2.1.1-Portable-Windows.zip`.
+2. Extract the archive to any folder (e.g. `D:\ClassroomOS`, a USB drive, or an air-gapped machine).
 3. **No prerequisites required:** Python, Node.js, and external runtimes are **not** needed. All libraries and binaries are bundled.
 4. Double-click `ClassroomOS.exe` (or `run-desktop.bat`).
-5. ClassroomOS launches the process supervisor on `http://127.0.0.1:5000` and opens your browser.
+5. ClassroomOS launches the process supervisor on `http://127.0.0.1:5000` and opens your browser directly.
 
 ---
 
-## 3. Persistent Data Directory & Privacy Isolation
+## 3. Persistent Data Directory & Storage Management (C: vs D: Drives)
 
-ClassroomOS implements strict isolation between application code and user data:
+ClassroomOS 2.1.1 implements complete separation between application binaries and persistent user data:
 - **Application Binaries:** Reside in the installation folder or portable directory.
-- **User Data Storage:** Persisted in `%LOCALAPPDATA%\ClassroomOS\data\`:
+- **Persistent Data Directory (`<DATA_DIR>`):**
+  Can be configured on `C:`, `D:`, or any secondary volume:
   - `classroom.db`: Primary SQLite relational database.
-  - `branding\`: Custom uploaded institution logos (PNG, JPG, SVG).
-  - `backups\`: Timestamped database snapshots and SHA-256 manifests.
+  - `photos/students/`: Student portrait photographs (JPEG, PNG, WEBP; resized to max 1024px).
+  - `branding/`: Custom uploaded institution logos (PNG, JPG, SVG).
+  - `backups/`: Timestamped database snapshots and SHA-256 manifests.
+  - `logs/`: Application diagnostics and launcher log (`launcher.log`).
 - **Application Secrets:** Automatically generated 384-bit cryptographic key saved to `%LOCALAPPDATA%\ClassroomOS\secret.key`.
 
-> **Important:** Reinstalling, upgrading, or deleting the application program folder will **never** delete student records, attendance logs, or institution logos.
+### Path Resolution Priority
+The backend resolves the data directory via `storage_manager.py` using the following hierarchy:
+1. `CLASSROOM_DATA_DIR` environment variable (for testing or scripted environments).
+2. `{app}\storage_config.json` (written during Inno Setup installation).
+3. Windows Registry: `HKCU\Software\ClassroomOS\DataDir`.
+4. Default fallback: `%LOCALAPPDATA%\ClassroomOS\data`.
+
+### Relocating Data Directory Post-Installation
+Administrators can relocate their persistent data directory at any time:
+1. Log in to ClassroomOS as an administrator.
+2. Navigate to **Admin Settings > Database & Backups**.
+3. Under **Persistent Data Directory & Drive Selection**, enter the target directory (e.g. `D:\ClassroomOSData`).
+4. Click **Migrate Data Directory**. ClassroomOS will:
+   - Validate target path accessibility and disk space.
+   - Atomically copy all database records, student photos, branding assets, and backups.
+   - Verify SQLite integrity and SHA-256 database checksums.
+   - Update configuration to use the new directory.
+
+### Temporary C: Drive Space Usage
+While all permanent student records, photos, and databases reside on the selected data drive, the following items may temporarily consume space on `C:` during runtime:
+- **Web Browser Cache:** Chrome, Edge, or Brave store transient cached HTML/CSS/JS in `%LOCALAPPDATA%\Google\Chrome` or `%LOCALAPPDATA%\Microsoft\Edge`.
+- **Operating System Temp Files:** Windows temp files (`%TEMP%`) during active installer execution.
+- **Windows User Registry:** Minor registry configuration under `HKCU\Software\ClassroomOS`.
 
 ---
 
 ## 4. First-Time Setup & Administrator Bootstrapping
 
-1. Launch ClassroomOS via `run-desktop.bat` or the desktop shortcut.
-2. Click **Sign In** in the top navigation bar.
+1. Launch ClassroomOS via the desktop shortcut or `ClassroomOS.exe`.
+2. Click **Setup Administrator** in the top navigation bar.
 3. If no user accounts exist, the system enters **Bootstrap Mode**.
-4. The first account created via `/api/auth/bootstrap` becomes the **Chief Administrator**.
+4. Create the initial root administrator account (Full Name, Email, Password 12+ characters).
 5. Log in with the newly created administrator credentials.
 6. Navigate to **Admin Settings**:
-   - **Institution Profile:** Set Institution Name, Code, Contact, Email, and Description.
-   - **Branding:** Upload your official School Logo or Crest.
+   - **School Profile & Branding:** Set Institution Name, Code, Contact, Email, Description, and Logo.
    - **Classes & Sections:** Configure academic classes, sections, and room assignments.
    - **Academic Terms:** Set start and end dates for academic semesters.
-   - **Staff Management:** Provision staff teacher accounts, assign classes, and manage passwords.
-   - **Storage & Backups:** View database size and create an on-demand verified backup.
+   - **Staff Accounts:** Provision staff teacher accounts, assign classes, and manage passwords.
+   - **Database & Backups:** View database size, student photos count, total application data, host disk free space, and create on-demand verified backups.
 
 ---
 
-## 5. Upgrade Procedures & Migration Safety (v2.0.0 to v2.1.0)
+## 5. Upgrade Procedures & Migration Safety
 
-ClassroomOS includes an **automatic transactional migration engine** that guarantees zero data loss when upgrading from legacy schema versions (v0 through v5) to v6:
-
-1. **Automatic Pre-Migration Snapshot:** Before applying any schema changes, ClassroomOS uses SQLite's Online Backup API to create a verified snapshot in `%LOCALAPPDATA%\ClassroomOS\data\backups\pre-migration-v<version>-<timestamp>.db`.
-2. **Transactional DDL:** Schema migrations execute inside database transactions with foreign key enforcement and WAL mode journaling.
-3. **Migration 6:** Automatically adds `description`, WhatsApp settings columns to `institution_settings`, guardian/consent columns to `students`, and provisions the `whatsapp_notifications` table.
-4. **Idempotent Verification:** Schema version is tracked in `schema_migrations`. Current schema version is `6`.
+ClassroomOS includes an **automatic transactional migration engine** that guarantees zero data loss when upgrading:
+1. **Automatic Pre-Migration Snapshot:** Before applying schema updates, ClassroomOS takes a point-in-time verified snapshot in `<DATA_DIR>/backups/pre-migration-v<version>-<timestamp>.db`.
+2. **Transactional DDL:** Schema updates execute inside transactions with foreign key enforcement and WAL mode journaling.
+3. **Non-Destructive Installer:** Running `ClassroomOS-Setup-2.1.1.exe` over an existing installation updates program binaries while preserving `<DATA_DIR>`, database records, photos, and encryption keys.
+4. **Uninstaller Safety:** The uninstaller cleanly removes program files and registry entries, but strictly preserves your database, photographs, and backups.
 
 ---
 
@@ -76,6 +100,5 @@ ClassroomOS includes an **automatic transactional migration engine** that guaran
 
 If port `5000` is already in use by another application:
 1. The launcher supervisor automatically searches loopback ports `5001` through `5050`.
-2. Selects the first unoccupied port and outputs:
-   `ClassroomOS running on http://127.0.0.1:<port>`
-3. Automatically opens the default web browser to the allocated loopback port.
+2. Selects the first unoccupied port and starts the server.
+3. If another ClassroomOS instance is already running on the port, the launcher directs the browser to the existing session without starting duplicate processes.

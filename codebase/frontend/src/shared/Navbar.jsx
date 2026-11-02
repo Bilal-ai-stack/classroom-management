@@ -14,7 +14,8 @@ import {
   Menu,
   X as CloseIcon,
   Settings,
-  Sparkles
+  Sparkles,
+  Power
 } from 'lucide-react';
 
 import SchoolLogo from './SchoolLogo';
@@ -27,7 +28,8 @@ export default function Navbar({
   bootstrapRequired = false,
   onOpenAuthModal,
   onOpenPrivacyModal,
-  onLogout
+  onLogout,
+  onShutdown
 }) {
   const [isDarkMode, setIsDarkMode] = useState(() => {
     return localStorage.getItem('classroom_theme') === 'dark';
@@ -126,6 +128,20 @@ export default function Navbar({
             <ShieldCheck size={16} color="#10B981" aria-hidden="true" />
             <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Privacy</span>
           </button>
+
+          {/* Shutdown / Exit button */}
+          {onShutdown && (
+            <button
+              onClick={onShutdown}
+              className="btn btn-secondary btn-sm"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.65rem' }}
+              title="Shut down ClassroomOS background service"
+              aria-label="Shut down ClassroomOS"
+            >
+              <Power size={14} color="#64748B" aria-hidden="true" />
+              <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Exit</span>
+            </button>
+          )}
 
           {/* Teacher Profile / Auth */}
           {teacherProfile?.authenticated ? (

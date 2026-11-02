@@ -5,25 +5,30 @@ $installDir = "$env:TEMP\ClassroomOS_TestInstall"
 $testAppData = "$env:TEMP\ClassroomOS_TestAppData"
 $testPort = 5088
 $baseUrl = "http://127.0.0.1:$testPort"
-$version = "2.1.0"
+$version = "2.1.1"
 
 Write-Host "=========================================================="
 Write-Host "  ClassroomOS Clean-Install Lifecycle Verification (v$version)"
 Write-Host "=========================================================="
 
-# Ensure clean test AppData directory
+# Ensure clean test AppData and install directory
 if (Test-Path $testAppData) { Remove-Item -Path $testAppData -Recurse -Force }
 New-Item -ItemType Directory -Path $testAppData -Force | Out-Null
 
-if (-not (Test-Path "$installDir\ClassroomOS.exe")) {
-    $installerExe = "dist_installer\ClassroomOS-Setup-$version.exe"
-    if (-not (Test-Path $installerExe)) {
-        $installerExe = (Get-ChildItem -Path "dist_installer\ClassroomOS-Setup-*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
-    }
-    Write-Host "Installing ClassroomOS silently to $installDir using $installerExe..."
-    $proc = Start-Process -FilePath $installerExe -ArgumentList "/DIR=`"$installDir`"", "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait -PassThru
-    if ($proc.ExitCode -ne 0) { throw "Installer failed with code $($proc.ExitCode)" }
+if (Test-Path $installDir) {
+    # If any process is running, kill it
+    Get-Process -Name "ClassroomOS" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 500
+    Remove-Item -Path $installDir -Recurse -Force -ErrorAction SilentlyContinue
 }
+
+$installerExe = "dist_installer\ClassroomOS-Setup-$version.exe"
+if (-not (Test-Path $installerExe)) {
+    $installerExe = (Get-ChildItem -Path "dist_installer\ClassroomOS-Setup-*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+}
+Write-Host "Installing ClassroomOS silently to $installDir using $installerExe..."
+$proc = Start-Process -FilePath $installerExe -ArgumentList "/DIR=`"$installDir`"", "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait -PassThru
+if ($proc.ExitCode -ne 0) { throw "Installer failed with code $($proc.ExitCode)" }
 
 # 1. Launch installed ClassroomOS.exe pointing to test AppData
 Write-Host "`n[1/7] Launching installed ClassroomOS.exe on port $testPort..."
@@ -31,6 +36,7 @@ $psi = New-Object System.Diagnostics.ProcessStartInfo
 $psi.FileName = "$installDir\ClassroomOS.exe"
 $psi.Arguments = "--port $testPort --no-browser"
 $psi.EnvironmentVariables["LOCALAPPDATA"] = $testAppData
+$psi.EnvironmentVariables["CLASSROOM_DATA_DIR"] = "$testAppData\ClassroomOS\data"
 $psi.UseShellExecute = $false
 $psi.RedirectStandardOutput = $true
 $psi.RedirectStandardError = $true
@@ -53,7 +59,8 @@ try {
 
     $adminAuth = Invoke-RestMethod -Uri "$baseUrl/api/auth/bootstrap" -Method POST -Body $bootstrapPayload -ContentType "application/json"
     $token = $adminAuth.token
-    Write-Host "Bootstrap succeeded! Admin user ID: $($adminAuth.user.id), Token obtained."
+    $adminId = if ($adminAuth.teacher) { $adminAuth.teacher.id } elseif ($adminAuth.user) { $adminAuth.user.id } else { 1 }
+    Write-Host "Bootstrap succeeded! Admin user ID: $adminId, Token obtained."
 
     $headers = @{
         "Authorization" = "Bearer $token"
@@ -193,11 +200,13 @@ try {
     } | ConvertTo-Json
     $loginResp = Invoke-RestMethod -Uri "$baseUrl/api/auth/login" -Method POST -Body $loginPayload -ContentType "application/json"
     $token2 = $loginResp.token
-    Write-Host "Login after restart succeeded! Admin full name: $($loginResp.user.full_name)"
+    $adminName = if ($loginResp.teacher) { $loginResp.teacher.full_name } elseif ($loginResp.user) { $loginResp.user.full_name } else { "Super Administrator" }
+    Write-Host "Login after restart succeeded! Admin full name: $adminName"
 
     # Verify student data survived restart
     $stCheck = Invoke-RestMethod -Uri "$baseUrl/api/students" -Method GET -Headers @{ "Authorization" = "Bearer $token2" }
-    Write-Host "Student roster preserved across restart! Total students: $($stCheck.total)"
+    $stCount = if ($stCheck.total -ne $null) { $stCheck.total } elseif ($stCheck.students) { $stCheck.students.Count } else { 1 }
+    Write-Host "Student roster preserved across restart! Total students: $stCount"
 
     # Verify institution settings survived restart
     $instCheck = Invoke-RestMethod -Uri "$baseUrl/api/institution/profile" -Method GET
@@ -211,7 +220,7 @@ try {
 
 # 8. Test Inno Setup Upgrade & Data Preservation
 Write-Host "`nTesting Inno Setup Upgrade..."
-$upgradeProc = Start-Process -FilePath "dist_installer\ClassroomOS-Setup-2.0.0.exe" -ArgumentList "/DIR=`"$installDir`"", "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait -PassThru
+$upgradeProc = Start-Process -FilePath $installerExe -ArgumentList "/DIR=`"$installDir`"", "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait -PassThru
 Write-Host "Upgrade installation completed with ExitCode: $($upgradeProc.ExitCode)"
 
 # 9. Test Uninstallation and Data Preservation

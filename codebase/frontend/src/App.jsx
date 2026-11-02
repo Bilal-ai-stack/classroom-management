@@ -4,11 +4,12 @@ import Modal from './shared/Modal';
 import StatusBadge from './shared/StatusBadge';
 import SchoolLogo from './shared/SchoolLogo';
 import AdminSettings from './pages/AdminSettings';
-import { studentApi, attendanceApi, photoApi, authApi, privacyApi, adminApi, whatsappApi } from './shared/api';
+import { studentApi, attendanceApi, photoApi, authApi, privacyApi, adminApi, whatsappApi, systemApi } from './shared/api';
 import {
   Users,
   Search,
   Plus,
+  Upload,
   Edit2,
   Archive,
   RefreshCw,
@@ -108,6 +109,12 @@ export default function App() {
   const [viewingStudent, setViewingStudent] = useState(null);
   const [studentHistory, setStudentHistory] = useState(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [isUploadingPortfolioPhoto, setIsUploadingPortfolioPhoto] = useState(false);
+  const portfolioPhotoInputRef = useRef(null);
+  const newStudentPhotoInputRef = useRef(null);
+  const editStudentPhotoInputRef = useRef(null);
+  const [newStudentPhotoFile, setNewStudentPhotoFile] = useState(null);
+  const [newStudentPhotoPreview, setNewStudentPhotoPreview] = useState(null);
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -469,13 +476,86 @@ export default function App() {
     }
   };
 
+  const handleNewStudentPhotoChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        showToast('Photo size exceeds 5MB limit.', 'error');
+        return;
+      }
+      setNewStudentPhotoFile(file);
+      setNewStudentPhotoPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleClearNewStudentPhoto = () => {
+    setNewStudentPhotoFile(null);
+    setNewStudentPhotoPreview(null);
+    if (newStudentPhotoInputRef.current) newStudentPhotoInputRef.current.value = '';
+  };
+
+  const handlePortfolioPhotoSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !viewingStudent) return;
+    try {
+      setIsUploadingPortfolioPhoto(true);
+      const res = await studentApi.uploadPhoto(viewingStudent.id, file);
+      if (res.success) {
+        showToast(`Photograph updated for ${viewingStudent.full_name}`);
+        const updated = { ...viewingStudent, ...res.student, has_photo: true, photo_url: res.photo_url };
+        setViewingStudent(updated);
+        setStudents((prev) => prev.map((s) => (s.id === viewingStudent.id ? updated : s)));
+      }
+    } catch (err) {
+      showToast(err.message || 'Failed to upload photo', 'error');
+    } finally {
+      setIsUploadingPortfolioPhoto(false);
+      if (portfolioPhotoInputRef.current) portfolioPhotoInputRef.current.value = '';
+    }
+  };
+
+  const handlePortfolioPhotoDelete = async () => {
+    if (!viewingStudent) return;
+    if (!window.confirm(`Are you sure you want to remove the photograph for ${viewingStudent.full_name}?`)) return;
+    try {
+      setIsUploadingPortfolioPhoto(true);
+      const res = await studentApi.deletePhoto(viewingStudent.id);
+      if (res.success) {
+        showToast('Student photograph removed.');
+        const updated = { ...viewingStudent, ...res.student, has_photo: false, photo_url: null, photo_path: '' };
+        setViewingStudent(updated);
+        setStudents((prev) => prev.map((s) => (s.id === viewingStudent.id ? updated : s)));
+      }
+    } catch (err) {
+      showToast(err.message || 'Failed to remove photo', 'error');
+    } finally {
+      setIsUploadingPortfolioPhoto(false);
+    }
+  };
+
+  const handleShutdownApp = async () => {
+    if (!window.confirm('Are you sure you want to shut down ClassroomOS? The local background service will terminate cleanly.')) return;
+    try {
+      await systemApi.shutdown();
+      showToast('ClassroomOS background service is shutting down. You can safely close this browser window.');
+    } catch {
+      showToast('Shutdown requested. Closing application.', 'info');
+    }
+  };
+
   const handleOpenAddModal = () => {
+    handleClearNewStudentPhoto();
     setFormData({
       roll_number: `R-${Math.floor(100 + Math.random() * 900)}`,
       full_name: '',
       class_name: classes[0] || 'Grade 4',
       section: 'A',
       guardian_contact: '',
+      guardian_name: '',
+      guardian_relationship: 'Guardian',
+      whatsapp_number: '',
+      whatsapp_consent: false,
+      notification_preferences: 'attendance',
       enrollment_date: getTodayDate(),
       notes: ''
     });
@@ -487,8 +567,17 @@ export default function App() {
     e.preventDefault();
     setFormError('');
     try {
-      await studentApi.createStudent(formData);
+      let payload;
+      if (newStudentPhotoFile) {
+        payload = new FormData();
+        Object.entries(formData).forEach(([k, v]) => payload.append(k, v ?? ''));
+        payload.append('photo', newStudentPhotoFile);
+      } else {
+        payload = formData;
+      }
+      await studentApi.createStudent(payload);
       setIsAddModalOpen(false);
+      handleClearNewStudentPhoto();
       showToast(`Student ${formData.full_name} enrolled successfully!`);
       loadStudents();
       loadDashboardStats();
@@ -799,6 +888,7 @@ export default function App() {
         }}
         onOpenPrivacyModal={() => { setIsPrivacyModalOpen(true); loadPrivacyDetails(); }}
         onLogout={handleLogout}
+        onShutdown={handleShutdownApp}
       />
 
       {!isOnline && (
@@ -1209,10 +1299,42 @@ export default function App() {
                           {student.roll_number}
                         </td>
                         <td>
-                          <div style={{ fontWeight: 700 }}>{student.full_name}</div>
-                          {student.notes && (
-                            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{student.notes}</div>
-                          )}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                            <div style={{
+                              width: '32px',
+                              height: '32px',
+                              borderRadius: '8px',
+                              background: '#F1F5F9',
+                              border: '1px solid var(--border)',
+                              overflow: 'hidden',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0
+                            }}>
+                              {student.has_photo ? (
+                                <img
+                                  src={`/api/students/${student.id}/photo?v=${student.updated_at || 1}`}
+                                  alt={student.full_name}
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    if (e.target.parentElement) e.target.parentElement.innerText = student.full_name.charAt(0);
+                                  }}
+                                />
+                              ) : (
+                                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--primary)' }}>
+                                  {student.full_name.charAt(0)}
+                                </span>
+                              )}
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: 700 }}>{student.full_name}</div>
+                              {student.notes && (
+                                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{student.notes}</div>
+                              )}
+                            </div>
+                          </div>
                         </td>
                         <td>
                           <span style={{ fontWeight: 600 }}>{student.class_name}</span>
@@ -1879,24 +2001,73 @@ export default function App() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', gap: '0.75rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <div style={{
-                  width: '54px',
-                  height: '54px',
-                  borderRadius: '14px',
-                  background: 'linear-gradient(135deg, #2563EB, #1D4ED8)',
-                  color: '#FFFFFF',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '1.3rem',
-                  fontWeight: 800
-                }}>
-                  {viewingStudent.full_name.charAt(0)}
+                <div style={{ position: 'relative' }}>
+                  <div style={{
+                    width: '68px',
+                    height: '68px',
+                    borderRadius: '16px',
+                    background: '#F1F5F9',
+                    border: '2px solid var(--border)',
+                    overflow: 'hidden',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
+                  }}>
+                    {viewingStudent.has_photo ? (
+                      <img
+                        src={`/api/students/${viewingStudent.id}/photo?v=${viewingStudent.updated_at || 1}`}
+                        alt={viewingStudent.full_name}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          if (e.target.parentElement) e.target.parentElement.innerText = viewingStudent.full_name.charAt(0);
+                        }}
+                      />
+                    ) : (
+                      <span style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--primary)' }}>
+                        {viewingStudent.full_name.charAt(0)}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)', margin: 0 }}>{viewingStudent.full_name}</h3>
                   <div style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginTop: '0.15rem' }}>
                     Roll: <strong style={{ color: 'var(--primary)' }}>{viewingStudent.roll_number}</strong> • {viewingStudent.class_name} (Section {viewingStudent.section})
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.45rem', alignItems: 'center' }}>
+                    <input
+                      type="file"
+                      ref={portfolioPhotoInputRef}
+                      accept="image/jpeg,image/png,image/webp"
+                      style={{ display: 'none' }}
+                      onChange={handlePortfolioPhotoSelect}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      disabled={isUploadingPortfolioPhoto}
+                      onClick={() => portfolioPhotoInputRef.current?.click()}
+                      style={{ fontSize: '0.76rem', padding: '0.25rem 0.55rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                    >
+                      <Upload size={12} />
+                      <span>{isUploadingPortfolioPhoto ? 'Saving...' : viewingStudent.has_photo ? 'Change Photo' : 'Upload Photo'}</span>
+                    </button>
+                    {viewingStudent.has_photo && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        disabled={isUploadingPortfolioPhoto}
+                        onClick={handlePortfolioPhotoDelete}
+                        style={{ fontSize: '0.76rem', padding: '0.25rem 0.55rem', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                        title="Remove student photograph"
+                      >
+                        <Trash2 size={12} />
+                        <span>Remove</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2054,6 +2225,53 @@ export default function App() {
               {formError}
             </div>
           )}
+
+          {/* Photograph Picker */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem', padding: '0.85rem', background: 'var(--bg-main)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+            <div style={{ width: '60px', height: '60px', borderRadius: '12px', background: '#E2E8F0', border: '1px solid var(--border)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              {newStudentPhotoPreview ? (
+                <img src={newStudentPhotoPreview} alt="Student Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <Camera size={26} color="var(--text-muted)" />
+              )}
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: '0.82rem', fontWeight: 700, display: 'block', marginBottom: '0.3rem', color: 'var(--text-main)' }}>
+                Student Portrait Photograph (Optional)
+              </label>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <input
+                  type="file"
+                  ref={newStudentPhotoInputRef}
+                  accept="image/jpeg,image/png,image/webp"
+                  style={{ display: 'none' }}
+                  onChange={handleNewStudentPhotoChange}
+                />
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => newStudentPhotoInputRef.current?.click()}
+                  style={{ fontSize: '0.78rem', padding: '0.25rem 0.65rem' }}
+                >
+                  <Upload size={13} style={{ marginRight: '0.3rem' }} />
+                  {newStudentPhotoFile ? 'Change Photo' : 'Select Photo'}
+                </button>
+                {newStudentPhotoFile && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    style={{ fontSize: '0.78rem', color: 'var(--danger)', padding: '0.25rem 0.65rem' }}
+                    onClick={handleClearNewStudentPhoto}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                JPG, PNG, or WEBP up to 5MB. Persisted in local data directory.
+              </span>
+            </div>
+          </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
             <div className="form-group">
@@ -2215,6 +2433,87 @@ export default function App() {
           {formError && (
             <div style={{ background: 'var(--danger-bg)', color: 'var(--danger)', padding: '0.65rem 0.85rem', borderRadius: 'var(--radius-sm)', marginBottom: '1rem', fontSize: '0.85rem', fontWeight: 600 }}>
               {formError}
+            </div>
+          )}
+
+          {/* Photograph Management */}
+          {currentStudent && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem', padding: '0.85rem', background: 'var(--bg-main)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '12px', background: '#F1F5F9', border: '1px solid var(--border)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {currentStudent.has_photo ? (
+                  <img
+                    src={`/api/students/${currentStudent.id}/photo?v=${currentStudent.updated_at || 1}`}
+                    alt={currentStudent.full_name}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      if (e.target.parentElement) e.target.parentElement.innerText = currentStudent.full_name.charAt(0);
+                    }}
+                  />
+                ) : (
+                  <span style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--primary)' }}>
+                    {currentStudent.full_name.charAt(0)}
+                  </span>
+                )}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '0.25rem' }}>Student Photograph</div>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <input
+                    type="file"
+                    ref={editStudentPhotoInputRef}
+                    accept="image/jpeg,image/png,image/webp"
+                    style={{ display: 'none' }}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file || !currentStudent) return;
+                      try {
+                        const res = await studentApi.uploadPhoto(currentStudent.id, file);
+                        if (res.success) {
+                          showToast('Photograph updated successfully');
+                          const updated = { ...currentStudent, ...res.student, has_photo: true, photo_url: res.photo_url };
+                          setCurrentStudent(updated);
+                          setStudents((prev) => prev.map((s) => (s.id === currentStudent.id ? updated : s)));
+                        }
+                      } catch (err) {
+                        showToast(err.message || 'Failed to upload photo', 'error');
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => editStudentPhotoInputRef.current?.click()}
+                    style={{ fontSize: '0.78rem', padding: '0.25rem 0.65rem' }}
+                  >
+                    <Upload size={13} style={{ marginRight: '0.3rem' }} />
+                    {currentStudent.has_photo ? 'Change Photo' : 'Upload Photo'}
+                  </button>
+                  {currentStudent.has_photo && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{ fontSize: '0.78rem', color: 'var(--danger)', padding: '0.25rem 0.65rem' }}
+                      onClick={async () => {
+                        if (!window.confirm('Remove photograph for this student?')) return;
+                        try {
+                          const res = await studentApi.deletePhoto(currentStudent.id);
+                          if (res.success) {
+                            showToast('Photograph removed');
+                            const updated = { ...currentStudent, ...res.student, has_photo: false, photo_url: null, photo_path: '' };
+                            setCurrentStudent(updated);
+                            setStudents((prev) => prev.map((s) => (s.id === currentStudent.id ? updated : s)));
+                          }
+                        } catch (err) {
+                          showToast(err.message || 'Failed to remove photo', 'error');
+                        }
+                      }}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 

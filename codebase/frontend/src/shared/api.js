@@ -40,14 +40,32 @@ export const studentApi = {
     return apiRequest(`/students?${params.toString()}`);
   },
   getStudent: (id) => apiRequest(`/students/${id}`),
-  createStudent: (data) => apiRequest('/students', {
-    method: 'POST',
-    body: JSON.stringify(data)
+  createStudent: (data) => {
+    const isFormData = data instanceof FormData;
+    return apiRequest('/students', {
+      method: 'POST',
+      body: isFormData ? data : JSON.stringify(data)
+    });
+  },
+  updateStudent: (id, data) => {
+    const isFormData = data instanceof FormData;
+    return apiRequest(`/students/${id}`, {
+      method: 'PUT',
+      body: isFormData ? data : JSON.stringify(data)
+    });
+  },
+  uploadPhoto: (id, file) => {
+    const fd = new FormData();
+    fd.append('photo', file);
+    return apiRequest(`/students/${id}/photo`, {
+      method: 'POST',
+      body: fd
+    });
+  },
+  deletePhoto: (id) => apiRequest(`/students/${id}/photo`, {
+    method: 'DELETE'
   }),
-  updateStudent: (id, data) => apiRequest(`/students/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(data)
-  }),
+  getPhotoUrl: (id, version) => `/api/students/${id}/photo${version ? `?v=${version}` : ''}`,
   archiveStudent: (id, is_active) => apiRequest(`/students/${id}/archive`, {
     method: 'PATCH',
     body: JSON.stringify({ is_active })
@@ -207,6 +225,10 @@ export const storageApi = {
   }),
   deleteBackup: (filename) => apiRequest(`/admin/backups/${encodeURIComponent(filename)}`, {
     method: 'DELETE'
+  }),
+  migrateStorage: (targetDirectory) => apiRequest('/admin/storage/migrate', {
+    method: 'POST',
+    body: JSON.stringify({ target_directory: targetDirectory })
   })
 };
 
@@ -226,6 +248,11 @@ export const whatsappApi = {
     method: 'POST',
     body: JSON.stringify(data)
   })
+};
+
+// System Supervision API (Loopback only)
+export const systemApi = {
+  shutdown: () => apiRequest('/system/shutdown', { method: 'POST' })
 };
 
 

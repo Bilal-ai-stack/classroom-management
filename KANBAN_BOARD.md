@@ -4,7 +4,7 @@
 **Methodology:** Agile Kanban with Work-In-Progress (WIP) limits  
 **Board URL:** `https://github.com/Bilal-ai-stack/classroom-management/projects`
 
-## Classroom Management System 2.1 — Active Release Lane
+## Classroom Management System 2.1.1 — Active Release Lane
 
 The evidence-backed roadmap is maintained in `docs/CODEX_AUDIT.md` and execution results in `docs/CODEX_PROGRESS.md`.
 
@@ -22,6 +22,10 @@ The evidence-backed roadmap is maintained in `docs/CODEX_AUDIT.md` and execution
 - [x] P1: Guardian WhatsApp Notification Module (consent, manual deep-link preview modal, automated Cloud API sandbox).
 - [x] P2: Mobile & PWA Offline Readiness (`manifest.webmanifest`, `sw.js`, offline indicator banner).
 - [x] P3: Community Packaging & Product Landing Website (`virtualgoal.com/classroomos`).
+- [x] **P0: Student Photograph Persistence Lifecycle (v2.1.1)** (registration photo upload, portfolio modal replacement/deletion, Pillow format & size validation, in-memory `io.BytesIO` streaming, zero Windows file locking, SVG fallback avatar).
+- [x] **P0: Complete C: and D: Storage Management (v2.1.1)** (independent installation and persistent data directories, Inno Setup `CreateInputDirPage`, `storage_manager.py` resolution hierarchy, live metrics dashboard, safe verified migration with automatic rollback).
+- [x] **P1: Professional Windows Launching (v2.1.1)** (PyInstaller windowed GUI subsystem `console=False`, elimination of Command Prompt window, `SafeOutputLogger`, native MessageBox error dialogs, loopback server readiness polling, in-app Exit button).
+- [x] **P0: Production Release Packaging & Verification (v2.1.1)** (`ClassroomOS-Setup-2.1.1.exe`, `ClassroomOS-v2.1.1-Portable-Windows.zip`, SHA-256 manifests, clean install lifecycle verification, packaged Playwright E2E testing).
 
 ---
 
@@ -32,13 +36,11 @@ The evidence-backed roadmap is maintained in `docs/CODEX_AUDIT.md` and execution
 │   📋 Backlog    │ 🎯 Ready (To Do)│ 🚧 In Progress  │ 👀 In Review/PR │     ✅ Done     │
 │                 │   (WIP Max: 3)  │   (WIP Max: 2)  │   (WIP Max: 2)  │                 │
 ├─────────────────┼─────────────────┼─────────────────┼─────────────────┼─────────────────┤
-│                 │                 │                 │                 │ • Issues #2-#14 │
-│                 │                 │                 │                 │ • Issue #15     │
-│                 │                 │                 │                 │ • Issue #16     │
-│                 │                 │                 │                 │ • Issue #17     │
-│                 │                 │                 │                 │ • Issue #18     │
-│                 │                 │                 │                 │ • Issue #19     │
-│                 │                 │                 │                 │ • Issue #20     │
+│                 │                 │                 │                 │ • Issues #2-#20 │
+│                 │                 │                 │                 │ • Issue #21     │
+│                 │                 │                 │                 │ • Issue #22     │
+│                 │                 │                 │                 │ • Issue #23     │
+│                 │                 │                 │                 │ • Issue #24     │
 └─────────────────┴─────────────────┴─────────────────┴─────────────────┴─────────────────┘
 ```
 
@@ -48,7 +50,7 @@ The evidence-backed roadmap is maintained in `docs/CODEX_AUDIT.md` and execution
 
 ### 1. 📋 Backlog (Future Work)
 - **Policy:** Contains scoped issues not yet scheduled for immediate development.
-- **Current Cards:** All primary roadmap epics for v2.1.0 completed!
+- **Current Cards:** All primary roadmap epics for v2.1.1 completed!
 
 ### 2. 🎯 Ready / To Do (WIP Limit: 3)
 - **Policy:** Clear acceptance criteria defined, dependencies resolved, ready for immediate assignment.
@@ -88,3 +90,7 @@ The evidence-backed roadmap is maintained in `docs/CODEX_AUDIT.md` and execution
   - [x] `[#18]` [Feature] Guardian WhatsApp Notification Module (Consent, Manual wa.me Preview, Cloud API Sandbox) *(v2.1.0)*
   - [x] `[#19]` [PWA & Offline] Service Worker Cache & Real-Time Offline Banner *(v2.1.0)*
   - [x] `[#20]` [Release] Packaging Pipeline (Setup Exe, Portable Zip, SHA256SUMS, Product Landing Page) *(v2.1.0)*
+  - [x] `[#21]` [Feature] Student Photograph Persistence Lifecycle & Pillow Validation *(v2.1.1)*
+  - [x] `[#22]` [Feature] Complete C: and D: Storage Management, Custom Inno Page & Verified Migration *(v2.1.1)*
+  - [x] `[#23]` [Desktop] Clean Windowed Windows Launcher (Zero Command Prompt Window) & Loopback Exit *(v2.1.1)*
+  - [x] `[#24]` [Release] ClassroomOS 2.1.1 Production Installer, Standalone Portable ZIP & Checksums *(v2.1.1)*

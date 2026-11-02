@@ -943,46 +943,53 @@ def get_storage_paths():
 @admin_bp.route('/admin/storage', methods=['GET'])
 @require_roles('admin')
 def get_storage_info():
-    """Get database file size, backups list, integrity status, and available disk space."""
-    db_path, backup_dir = get_storage_paths()
-    db_size = db_path.stat().st_size if db_path.is_file() else 0
+    """Get database file size, student photographs, branding, backups, and disk metrics."""
+    from storage_manager import get_detailed_storage_metrics
+    data_dir = current_app.config.get('DATA_DIRECTORY')
+    if not data_dir:
+        db_path, _ = get_storage_paths()
+        data_dir = db_path.parent
 
-    backups = []
-    total_backup_bytes = 0
-    if backup_dir.is_dir():
-        for f in sorted(backup_dir.glob('*.db'), key=lambda p: p.stat().st_mtime, reverse=True):
-            f_size = f.stat().st_size
-            total_backup_bytes += f_size
-            is_valid = verify_backup(f)
-            backups.append({
-                'filename': f.name,
-                'size_bytes': f_size,
-                'size_display': f"{round(f_size / 1024, 1)} KB",
-                'created_at': datetime.fromtimestamp(f.stat().st_mtime, timezone.utc).isoformat(),
-                'verified': is_valid
-            })
-
-    try:
-        total, used, free = shutil.disk_usage(str(db_path.parent))
-    except Exception:
-        total, used, free = 0, 0, 0
-
+    metrics = get_detailed_storage_metrics(data_dir)
     return jsonify({
         'success': True,
-        'storage': {
-            'database_path': str(db_path),
-            'database_size_bytes': db_size,
-            'database_size_display': f"{round(db_size / 1024, 1)} KB",
-            'backup_directory': str(backup_dir),
-            'backup_count': len(backups),
-            'total_backup_size_bytes': total_backup_bytes,
-            'total_backup_size_display': f"{round(total_backup_bytes / 1024, 1)} KB",
-            'disk_free_bytes': free,
-            'disk_total_bytes': total,
-            'disk_free_display': f"{round(free / (1024 * 1024 * 1024), 2)} GB" if free else 'Unknown',
-            'backups': backups
-        }
+        'storage': metrics
     }), 200
+
+
+@admin_bp.route('/admin/storage/migrate', methods=['POST'])
+@require_roles('admin')
+def migrate_storage():
+    """Safely migrate ClassroomOS data directory to a chosen drive or path."""
+    data = request.get_json(silent=True) or {}
+    target_dir = str(data.get('target_directory', '')).strip()
+    if not target_dir:
+        return jsonify({'success': False, 'error': 'Target directory path is required.'}), 400
+
+    from storage_manager import migrate_data_directory
+    data_dir = current_app.config.get('DATA_DIRECTORY')
+    if not data_dir:
+        db_path, _ = get_storage_paths()
+        data_dir = db_path.parent
+
+    try:
+        result = migrate_data_directory(data_dir, target_dir)
+        record_audit(
+            'storage.migrate',
+            'storage_directory',
+            1,
+            {'source': str(data_dir), 'target': target_dir},
+            actor_user_id=request.current_user.id
+        )
+        return jsonify({
+            'success': True,
+            'message': f"ClassroomOS data directory successfully migrated to '{target_dir}'.",
+            'result': result
+        }), 200
+    except ValueError as ve:
+        return jsonify({'success': False, 'error': str(ve)}), 400
+    except Exception as err:
+        return jsonify({'success': False, 'error': f"Data migration failed: {str(err)}"}), 500
 
 
 @admin_bp.route('/admin/backups', methods=['POST'])

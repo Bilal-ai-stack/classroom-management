@@ -45,6 +45,8 @@ class Student(db.Model):
             'notification_preferences': self.notification_preferences or 'attendance',
             'enrollment_date': self.enrollment_date,
             'photo_path': self.photo_path or '',
+            'has_photo': bool(self.photo_path),
+            'photo_url': f"/api/students/{self.id}/photo?v={int(self.updated_at.timestamp()) if self.updated_at else 1}" if self.photo_path else None,
             'notes': self.notes or '',
             'is_active': self.is_active,
             'created_at': self.created_at.isoformat() if self.created_at else None,

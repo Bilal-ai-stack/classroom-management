@@ -6,6 +6,7 @@ import click
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from db import db
+from storage_manager import resolve_data_directory, ensure_storage_directories
 from migrations import MIGRATIONS, run_migrations, current_schema_version
 from database_tools import create_backup, database_path_from_uri, restore_backup, verify_backup
 from phase1_students.routes import students_bp
@@ -24,20 +25,9 @@ from phase4_quality.auth import require_auth
 def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
 
-    local_app_data = os.environ.get('LOCALAPPDATA')
-    if os.environ.get('CLASSROOM_DESKTOP') and local_app_data:
-        data_dir = os.path.join(local_app_data, 'ClassroomOS', 'data')
-        os.makedirs(data_dir, exist_ok=True)
-        db_path = os.path.join(data_dir, 'classroom.db')
-        backup_dir = os.path.join(local_app_data, 'ClassroomOS', 'backups')
-        branding_dir = os.path.join(data_dir, 'branding')
-    else:
-        os.makedirs(app.instance_path, exist_ok=True)
-        db_path = os.path.join(app.instance_path, 'classroom.db')
-        backup_dir = os.path.join(app.instance_path, 'backups')
-        branding_dir = os.path.join(app.instance_path, 'branding')
-
-    os.makedirs(branding_dir, exist_ok=True)
+    data_dir = resolve_data_directory(app.instance_path)
+    storage_dirs = ensure_storage_directories(data_dir)
+    db_path = data_dir / 'classroom.db'
 
     default_config = {
         'SECRET_KEY': os.environ.get('SECRET_KEY'),
@@ -48,10 +38,12 @@ def create_app(test_config=None):
         'AUTH_LOCKOUT_MINUTES': 15,
         'CORS_ORIGINS': ['http://127.0.0.1:5173', 'http://localhost:5173'],
         'AUTO_BACKUP_BEFORE_MIGRATION': True,
-        'BRANDING_DIRECTORY': Path(branding_dir),
+        'DATA_DIRECTORY': data_dir,
+        'BRANDING_DIRECTORY': storage_dirs['branding'],
+        'PHOTOS_DIRECTORY': storage_dirs['photos'],
+        'BACKUP_DIRECTORY': storage_dirs['backups'],
+        'LOGS_DIRECTORY': storage_dirs['logs'],
     }
-    if os.environ.get('CLASSROOM_DESKTOP'):
-        default_config['BACKUP_DIRECTORY'] = Path(backup_dir)
 
     app.config.from_mapping(default_config)
 
@@ -117,7 +109,10 @@ def create_app(test_config=None):
             installed_version = current_schema_version(db.engine)
             if installed_version < latest_version:
                 timestamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
-                backup_directory = Path(app.config.get('BACKUP_DIRECTORY') or existing_database.parent / 'backups')
+                if test_config and 'BACKUP_DIRECTORY' not in test_config:
+                    backup_directory = existing_database.parent / 'backups'
+                else:
+                    backup_directory = Path(app.config.get('BACKUP_DIRECTORY') or existing_database.parent / 'backups')
                 backup_path = backup_directory / f'pre-migration-v{installed_version}-{timestamp}.db'
                 create_backup(existing_database, backup_path)
         run_migrations(db.engine)
@@ -150,6 +145,25 @@ def create_app(test_config=None):
         """Restore a verified backup into a new database path only."""
         restored = restore_backup(backup, destination)
         click.echo(f'Verified database restored to new path: {restored}')
+
+    @app.route('/api/system/shutdown', methods=['POST'])
+    def system_shutdown():
+        """Gracefully shut down the ClassroomOS local server."""
+        remote = request.remote_addr or ''
+        if remote not in ('127.0.0.1', 'localhost', '::1') and not remote.startswith('127.'):
+            return jsonify({'success': False, 'error': 'Shutdown only permitted from loopback interface.'}), 403
+
+        import threading
+        def _terminate():
+            import time
+            time.sleep(0.4)
+            os._exit(0)
+        threading.Thread(target=_terminate, daemon=True).start()
+
+        return jsonify({
+            'success': True,
+            'message': 'ClassroomOS service is shutting down.'
+        }), 200
 
     @app.route('/api/health', methods=['GET'])
     def health_check():

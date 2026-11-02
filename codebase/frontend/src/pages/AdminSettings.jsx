@@ -129,6 +129,8 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
   const [storageInfo, setStorageInfo] = useState(null);
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [migrationTargetDir, setMigrationTargetDir] = useState('');
+  const [isMigrating, setIsMigrating] = useState(false);
 
   // -------------------------------------------------------------------------
   // 7. Security Audit Events State
@@ -650,6 +652,31 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
       }
     } catch (err) {
       onShowToast?.(err.message || 'Delete backup failed', 'error');
+    }
+  };
+
+  const handleMigrateStorage = async (e) => {
+    e.preventDefault();
+    const target = migrationTargetDir.trim();
+    if (!target) {
+      onShowToast?.('Please specify a valid target directory path (e.g. D:\\ClassroomOSData)', 'error');
+      return;
+    }
+    if (!window.confirm(`Relocate ClassroomOS persistent data directory to:\n${target}\n\nAll SQLite records, student photos, branding logos, and backups will be copied, integrity-verified, and preserved. Proceed?`)) {
+      return;
+    }
+    setIsMigrating(true);
+    try {
+      const res = await storageApi.migrateStorage(target);
+      if (res.success) {
+        onShowToast?.(res.message || 'Storage migrated successfully!', 'success');
+        setMigrationTargetDir('');
+        fetchStorage();
+      }
+    } catch (err) {
+      onShowToast?.(err.message || 'Migration failed', 'error');
+    } finally {
+      setIsMigrating(false);
     }
   };
 
@@ -1619,31 +1646,66 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
       {/* --------------------------------------------------------------------- */}
       {subTab === 'storage' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem' }}>
+          {storageInfo?.is_low_space && (
+            <div style={{ background: 'var(--danger-bg)', border: '1px solid var(--danger)', color: 'var(--danger)', padding: '0.85rem 1.25rem', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: '0.75rem', fontWeight: 600, fontSize: '0.9rem' }}>
+              <AlertCircle size={22} style={{ flexShrink: 0 }} />
+              <div>
+                <strong>Low Disk Space Alert:</strong> Drive {storageInfo.drive} has only {storageInfo.disk_free_display} free space remaining. Consider creating a verified backup and migrating ClassroomOS storage to a drive with larger capacity.
+              </div>
+            </div>
+          )}
+
           {/* Storage Overview Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '1rem' }}>
             <div className="card" style={{ padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '0.4rem' }}>
                 <Database size={16} />
-                <span>Primary SQLite Database</span>
+                <span>Primary Database</span>
               </div>
-              <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--text-main)' }}>
+              <div style={{ fontSize: '1.35rem', fontWeight: 700, color: 'var(--text-main)' }}>
                 {storageInfo?.database_size_display || '—'}
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.3rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={storageInfo?.database_path}>
-                Path: {storageInfo?.database_path || '—'}
+                SQLite: {storageInfo?.database_path ? storageInfo.database_path.split('\\').pop() : 'classroom.db'}
+              </div>
+            </div>
+
+            <div className="card" style={{ padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '0.4rem' }}>
+                <ImageIcon size={16} />
+                <span>Student Photos</span>
+              </div>
+              <div style={{ fontSize: '1.35rem', fontWeight: 700, color: '#2563EB' }}>
+                {storageInfo?.student_photos_count || 0} Photos
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
+                Storage size: {storageInfo?.student_photos_size_display || '0 KB'}
               </div>
             </div>
 
             <div className="card" style={{ padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '0.4rem' }}>
                 <HardDrive size={16} />
-                <span>Disk Storage Space Free</span>
+                <span>Total App Data</span>
               </div>
-              <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#059669' }}>
+              <div style={{ fontSize: '1.35rem', fontWeight: 700, color: '#1E3A8A' }}>
+                {storageInfo?.total_data_size_display || '0 KB'}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
+                Database, photos, logos & backups
+              </div>
+            </div>
+
+            <div className="card" style={{ padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '0.4rem' }}>
+                <HardDrive size={16} />
+                <span>Disk Free ({storageInfo?.drive || 'C:'})</span>
+              </div>
+              <div style={{ fontSize: '1.35rem', fontWeight: 700, color: '#059669' }}>
                 {storageInfo?.disk_free_display || '—'}
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
-                Local hard disk capacity for backups & records
+                Total capacity: {storageInfo?.disk_total_display || '—'}
               </div>
             </div>
 
@@ -1652,12 +1714,61 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
                 <CheckCircle size={16} />
                 <span>Verified Backups</span>
               </div>
-              <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#1E3A8A' }}>
+              <div style={{ fontSize: '1.35rem', fontWeight: 700, color: '#0284C7' }}>
                 {storageInfo?.backup_count || 0} Backups
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
-                Total archive size: {storageInfo?.total_backup_size_display || '0 KB'}
+                Total size: {storageInfo?.total_backup_size_display || '0 KB'}
               </div>
+            </div>
+          </div>
+
+          {/* Data Location & Migration Card */}
+          <div className="glass-card" style={{ padding: '1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: '0 0 0.5rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <HardDrive size={18} color="#1E3A8A" />
+              Persistent Data Directory & Drive Selection (C: / D:)
+            </h3>
+            <p style={{ margin: '0 0 1rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+              ClassroomOS supports storing your SQLite database, student photographs, and backup archives on any local drive (such as <code>D:\ClassroomOSData</code>) independently of program installation files.
+            </p>
+
+            <div style={{ background: 'var(--bg-main)', padding: '0.85rem 1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', marginBottom: '1.25rem' }}>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Active Persistent Storage Path:</div>
+              <div style={{ fontSize: '0.95rem', fontWeight: 700, fontFamily: 'monospace', color: 'var(--primary)', wordBreak: 'break-all', marginTop: '0.2rem' }}>
+                {storageInfo?.data_directory || '—'}
+              </div>
+            </div>
+
+            <form onSubmit={handleMigrateStorage} style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 300px' }}>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Enter new data path (e.g. D:\ClassroomOSData)"
+                  value={migrationTargetDir}
+                  onChange={(e) => setMigrationTargetDir(e.target.value)}
+                  disabled={isMigrating}
+                  style={{ width: '100%', fontFamily: 'monospace', fontSize: '0.88rem' }}
+                />
+              </div>
+              <button
+                type="submit"
+                className="btn-primary"
+                disabled={isMigrating || !migrationTargetDir.trim()}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 1.25rem', whiteSpace: 'nowrap', backgroundColor: '#1E3A8A' }}
+              >
+                <RefreshCw size={15} className={isMigrating ? 'spin' : ''} />
+                <span>{isMigrating ? 'Verifying & Migrating...' : 'Relocate Data Directory'}</span>
+              </button>
+            </form>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+              • All database tables and student photographs are verified with SHA-256 integrity checks before switching. Original files remain safely preserved.
+            </div>
+
+            {/* C: Drive Space Transparency Box */}
+            <div style={{ marginTop: '1.25rem', padding: '0.75rem 1rem', background: '#F8FAFC', border: '1px dashed var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+              <strong>C: Drive Storage Notice:</strong> ClassroomOS stores 100% of persistent data in your chosen directory. Standard web browser runtime cache and OS temporary directories may still consume minor temporary space on drive C: during active sessions.
             </div>
           </div>
 
@@ -1666,7 +1777,7 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
               <div>
                 <h3 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <HardDrive size={18} color="#1E3A8A" />
+                  <CheckCircle size={18} color="#1E3A8A" />
                   Database Backup Archives & Safe Point-in-Time Recovery
                 </h3>
                 <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
