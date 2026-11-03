@@ -109,8 +109,8 @@ All existing student records, administrator credentials, database migrations, an
 
 | Artifact | File Name | Size | SHA-256 Checksum |
 | :--- | :--- | :---: | :--- |
-| **Windows Installer** | `ClassroomOS-Setup-2.1.1.exe` | ~119 MB | `F09E3986DA3AEDA5EE0068FF10984D93713F6B084F3D93F523790CFDB66CCB1F` |
-| **Portable ZIP Archive** | `ClassroomOS-v2.1.1-Portable-Windows.zip` | ~132 MB | `C0C49A9AE872EBB08F646C4CAEC2C888A5082E375D59E42AA3565EF4D04B9CF5` |
+| **Windows Installer** | `ClassroomOS-Setup-2.1.1.exe` | ~53 MB | `286E79C4AD20FC04BC47EF7ABA6E32FCE4003A3D471425D4773CAB43418BBD19` |
+| **Portable ZIP Archive** | `ClassroomOS-v2.1.1-Portable-Windows.zip` | ~74 MB | `24221ACBED77A86ABC25BD73FE701D62DDC0016EE5C6AADEC5412E08871518FE` |
 | **Verification Manifest** | `dist_release/SHA256SUMS.txt` | 165 B | Verified SHA-256 manifest |
 
 ---
@@ -123,3 +123,4 @@ Upgrading from ClassroomOS 2.0.0 or 2.1.0 to 2.1.1 is fully non-destructive and 
 2. Run `ClassroomOS-Setup-2.1.1.exe`.
 3. Choose the same or a new installation directory. The installer automatically detects your existing persistent data directory from `HKCU\Software\ClassroomOS\DataDir`.
 4. Finish installation and launch ClassroomOS. All student records, attendance logs, and administrator accounts will remain intact.
+

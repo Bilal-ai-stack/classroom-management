@@ -39,7 +39,8 @@ import {
   UserPlus,
   MessageSquare,
   Send,
-  WifiOff
+  WifiOff,
+  Settings
 } from 'lucide-react';
 
 const getTodayDate = () => new Date().toISOString().split('T')[0];
@@ -376,6 +377,7 @@ export default function App() {
         setIsBootstrapMode(false);
         setIsAuthModalOpen(false);
         showToast(res.message || 'Administrator account created successfully! Welcome to ClassroomOS.');
+        setActiveTab('admin');
         loadTeacherProfile();
         loadInstitutionProfile();
       }
@@ -391,9 +393,13 @@ export default function App() {
       const res = await authApi.login(authForm.email, authForm.password);
       if (res && res.success) {
         localStorage.setItem('classroom_token', res.token);
-        setTeacherProfile({ ...res.teacher, authenticated: true });
+        const profile = { ...res.teacher, authenticated: true };
+        setTeacherProfile(profile);
         setIsAuthModalOpen(false);
         showToast(res.message || 'Authenticated successfully!');
+        if (profile.role === 'admin' || activeTab === 'admin') {
+          setActiveTab('admin');
+        }
       }
     } catch (err) {
       setAuthError(err.message || 'Invalid credentials');
@@ -1002,19 +1008,14 @@ export default function App() {
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                {teacherProfile?.role === 'admin' ? (
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => setActiveTab('admin')}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}
-                  >
-                    Institution Settings
-                  </button>
-                ) : (
-                  <span className="badge badge-neutral" style={{ fontSize: '0.8rem' }}>
-                    Active Academic Term
-                  </span>
-                )}
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setActiveTab('admin')}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}
+                >
+                  <Settings size={15} />
+                  Institution Settings
+                </button>
               </div>
             </div>
 
@@ -1133,18 +1134,16 @@ export default function App() {
                     <ArrowRight size={18} className="arrow-icon" />
                   </div>
 
-                  {teacherProfile?.role === 'admin' && (
-                    <div
-                      className="quick-action-item"
-                      onClick={() => setActiveTab('admin')}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <div style={{ color: 'var(--primary)' }}><Shield size={20} /></div>
-                        <span>Institutional Administration & Staff</span>
-                      </div>
-                      <ArrowRight size={18} className="arrow-icon" />
+                  <div
+                    className="quick-action-item"
+                    onClick={() => setActiveTab('admin')}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <div style={{ color: 'var(--primary)' }}><Shield size={20} /></div>
+                      <span>Institutional Administration & Staff</span>
                     </div>
-                  )}
+                    <ArrowRight size={18} className="arrow-icon" />
+                  </div>
                 </div>
               </div>
 
@@ -1983,11 +1982,70 @@ export default function App() {
 
         {/* ADMIN SETTINGS TAB */}
         {activeTab === 'admin' && (
-          <AdminSettings
-            teacherProfile={teacherProfile}
-            onShowToast={showToast}
-            onInstitutionUpdated={handleInstitutionUpdated}
-          />
+          teacherProfile?.role === 'admin' ? (
+            <AdminSettings
+              teacherProfile={teacherProfile}
+              onShowToast={showToast}
+              onInstitutionUpdated={handleInstitutionUpdated}
+            />
+          ) : (
+            <div className="card" style={{ maxWidth: '640px', margin: '3rem auto', textAlign: 'center', padding: '3.5rem 2rem' }}>
+              <div style={{
+                width: '68px',
+                height: '68px',
+                borderRadius: '50%',
+                background: 'rgba(30, 58, 138, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 1.5rem',
+                color: 'var(--primary)'
+              }}>
+                <Shield size={34} />
+              </div>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '0.75rem' }}>
+                Administrator Authentication Required
+              </h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', lineHeight: 1.6, maxWidth: '480px', margin: '0 auto 2rem' }}>
+                {bootstrapRequired
+                  ? 'No administrator accounts exist yet on this installation. Set up your root administrator account to access school profile, classes, staff permissions, and storage.'
+                  : 'Institutional administration is restricted to authorized school administrators. Please sign in with administrator credentials to access school profile, classes, staff management, and system backups.'}
+              </p>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-large"
+                  onClick={() => {
+                    setIsAuthModalOpen(true);
+                    setAuthError('');
+                    if (bootstrapRequired) {
+                      setIsBootstrapMode(true);
+                    }
+                  }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700 }}
+                >
+                  {bootstrapRequired ? (
+                    <>
+                      <Sparkles size={18} />
+                      <span>Setup Administrator</span>
+                    </>
+                  ) : (
+                    <>
+                      <LogIn size={18} />
+                      <span>Sign In as Administrator</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-large"
+                  onClick={() => setActiveTab('dashboard')}
+                >
+                  Return to Dashboard
+                </button>
+              </div>
+            </div>
+          )
         )}
       </main>
 

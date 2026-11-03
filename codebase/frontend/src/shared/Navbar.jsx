@@ -58,9 +58,9 @@ export default function Navbar({
     { id: 'dashboard',    label: 'Dashboard',       icon: LayoutDashboard },
     { id: 'students',     label: 'Students',         icon: Users            },
     { id: 'attendance',   label: 'Attendance',       icon: CalendarCheck    },
-    { id: 'photo-review', label: 'Photo Review',     icon: Camera           },
+    { id: 'photo_review', label: 'Photo Review',     icon: Camera           },
     { id: 'reports',      label: 'Reports',          icon: BarChart3        },
-    ...(teacherProfile?.role === 'admin' ? [{ id: 'admin', label: 'Admin', icon: Settings }] : [])
+    { id: 'admin',        label: 'Admin',            icon: Settings         }
   ];
 
   return (
