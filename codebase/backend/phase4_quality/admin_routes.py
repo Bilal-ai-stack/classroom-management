@@ -13,6 +13,7 @@ from phase1_students.models import Student
 from phase4_quality.auth import require_auth, require_roles, utcnow
 from phase4_quality.institution_models import AcademicClass, AcademicTerm, InstitutionSettings, WhatsAppNotification
 from phase4_quality.models import AuditEvent, User, record_audit
+from phase4_quality.phone_utils import normalize_phone_number, build_whatsapp_click_to_chat_url
 
 try:
     from PIL import Image
@@ -841,9 +842,11 @@ def test_whatsapp_message():
     phone = str(data.get('recipient_phone', '')).strip()
     message = str(data.get('message_text', 'ClassroomOS test notification message.')).strip()
 
-    cleaned_phone = re.sub(r'[^0-9+]', '', phone)
-    if len(cleaned_phone) < 7:
-        return jsonify({'success': False, 'error': 'Invalid recipient phone number format.'}), 400
+    phone_meta = normalize_phone_number(phone)
+    if not phone_meta['is_valid']:
+        return jsonify({'success': False, 'error': phone_meta.get('error') or 'Invalid recipient phone number format.'}), 400
+
+    cleaned_phone = phone_meta['display_format']
 
     # Test/development simulated delivery (prevents unauthorized external calls and billing)
     simulated_id = f"sim_wamid_{int(utcnow().timestamp())}"
@@ -895,9 +898,15 @@ def log_manual_whatsapp():
     msg_type = str(data.get('message_type', 'attendance')).strip()
     text = str(data.get('message_text', '')).strip()
 
-    cleaned_phone = re.sub(r'[^0-9+]', '', phone)
-    if not cleaned_phone or not text:
+    if not phone or not text:
         return jsonify({'success': False, 'error': 'Recipient phone and message text are required.'}), 400
+
+    phone_meta = normalize_phone_number(phone)
+    if not phone_meta['is_valid']:
+        return jsonify({'success': False, 'error': phone_meta.get('error') or 'Invalid recipient phone number format.'}), 400
+
+    cleaned_phone = phone_meta['display_format']
+    wa_url = build_whatsapp_click_to_chat_url(phone_meta['normalized'], text)
 
     notification = WhatsAppNotification(
         student_id=student_id if student_id else None,
@@ -917,13 +926,17 @@ def log_manual_whatsapp():
     record_audit('whatsapp.manual_link_opened', 'whatsapp_notification', notification.id, {
         'phone': cleaned_phone,
         'student_id': student_id,
-        'message_type': msg_type
+        'message_type': msg_type,
+        'country': phone_meta['country']
     }, request.current_user.id)
     db.session.commit()
 
     return jsonify({
         'success': True,
         'message': 'Manual notification link logged.',
+        'wa_url': wa_url,
+        'normalized_phone': phone_meta['normalized'],
+        'display_phone': phone_meta['display_format'],
         'notification': notification.to_dict()
     }), 201
 

@@ -120,7 +120,12 @@ def get_daily_attendance():
             'section': att.snapshot_section if (att and att.snapshot_section) else s.section,
             'status': current_status,
             'remarks': remarks,
-            'attendance_id': att_id
+            'attendance_id': att_id,
+            'guardian_name': s.guardian_name or '',
+            'guardian_contact': s.guardian_contact or '',
+            'whatsapp_number': s.whatsapp_number or '',
+            'guardian_relationship': s.guardian_relationship or 'Guardian',
+            'whatsapp_consent': bool(s.whatsapp_consent)
         })
 
     attendance_rate, present_rate, eligible_count = calculate_attendance_rates(

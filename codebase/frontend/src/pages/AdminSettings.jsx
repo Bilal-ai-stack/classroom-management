@@ -1538,10 +1538,10 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
               Dispatch a verified test payload to a phone number. In test mode, this generates a simulated WAMID without communicating with live external WhatsApp servers.
             </p>
 
-            <form onSubmit={handleSendTestWhatsapp} style={{ display: 'grid', gridTemplateColumns: '260px 1fr auto', gap: '1rem', alignItems: 'flex-end' }}>
+            <form onSubmit={handleSendTestWhatsapp} style={{ display: 'grid', gridTemplateColumns: '280px 1fr auto', gap: '1rem', alignItems: 'flex-end' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.3rem' }}>
-                  Recipient Phone (International E.164)
+                  Recipient Phone (Local 03xx or International +92 / +1)
                 </label>
                 <input
                   type="text"
@@ -1549,7 +1549,7 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
                   className="form-input"
                   value={testPhoneInput}
                   onChange={(e) => setTestPhoneInput(e.target.value)}
-                  placeholder="+1 (555) 000-1234"
+                  placeholder="03001234567 or +923001234567"
                   style={{ width: '100%' }}
                 />
               </div>
@@ -1582,9 +1582,14 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
 
           {/* Notification Audit Log */}
           <div className="glass-card" style={{ padding: '1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
-            <h3 style={{ fontSize: '1.05rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--text-main)' }}>
-              Recent Notification Audit Log
-            </h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 600, margin: 0, color: 'var(--text-main)' }}>
+                Recent Notification Audit Log
+              </h3>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Manual mode logs dispatches as &lsquo;Link Prepared&rsquo; pending teacher send in WhatsApp
+              </span>
+            </div>
             <div className="table-container" style={{ borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--border)' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                 <thead>
@@ -1614,12 +1619,14 @@ export default function AdminSettings({ teacherProfile, onShowToast, onInstituti
                         <span
                           className="badge"
                           style={{
-                            backgroundColor: log.status === 'sent' || log.status === 'prepared' ? 'var(--success-bg)' : 'var(--danger-bg)',
-                            color: log.status === 'sent' || log.status === 'prepared' ? 'var(--success)' : 'var(--danger)',
-                            fontSize: '0.75rem'
+                            backgroundColor: log.status === 'sent' ? 'var(--success-bg)' : log.status === 'prepared' ? '#EFF6FF' : 'var(--danger-bg)',
+                            color: log.status === 'sent' ? 'var(--success)' : log.status === 'prepared' ? '#1D4ED8' : 'var(--danger)',
+                            border: log.status === 'prepared' ? '1px solid #BFDBFE' : undefined,
+                            fontSize: '0.75rem',
+                            fontWeight: 600
                           }}
                         >
-                          {log.status}
+                          {log.status === 'prepared' ? 'Link Prepared (Manual)' : log.status === 'sent' ? 'Sent (API)' : log.status}
                         </span>
                       </td>
                       <td style={{ padding: '0.6rem 0.8rem', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

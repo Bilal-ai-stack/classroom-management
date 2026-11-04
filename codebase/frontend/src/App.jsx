@@ -40,8 +40,12 @@ import {
   MessageSquare,
   Send,
   WifiOff,
-  Settings
+  Settings,
+  ExternalLink,
+  Copy,
+  CheckCheck
 } from 'lucide-react';
+import { normalizePhoneNumber, buildWhatsAppClickToChatUrl } from './shared/phoneUtils';
 
 const getTodayDate = () => new Date().toISOString().split('T')[0];
 
@@ -143,11 +147,12 @@ export default function App() {
   // Guardian WhatsApp Notification State
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [whatsAppTarget, setWhatsAppTarget] = useState(null);
-  const [whatsAppTemplate, setWhatsAppTemplate] = useState('absent'); // 'absent' | 'late' | 'general'
+  const [whatsAppTemplate, setWhatsAppTemplate] = useState('absent'); // 'absent' | 'late' | 'present' | 'general'
   const [whatsAppPhone, setWhatsAppPhone] = useState('');
   const [whatsAppGuardianName, setWhatsAppGuardianName] = useState('');
   const [whatsAppMessageText, setWhatsAppMessageText] = useState('');
   const [isDispatchingWhatsApp, setIsDispatchingWhatsApp] = useState(false);
+  const [copiedWhatsAppText, setCopiedWhatsAppText] = useState(false);
 
   // Offline / Connectivity State
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
@@ -613,45 +618,77 @@ export default function App() {
   };
 
   const handleOpenWhatsAppModal = (student, defaultStatus = 'Absent') => {
-    setWhatsAppTarget(student);
-    const phone = student.whatsapp_number || student.guardian_contact || '';
-    setWhatsAppPhone(phone);
-    setWhatsAppGuardianName(student.guardian_name || 'Guardian');
+    // Cross-reference with full student record in state if available
+    const studentId = student.id || student.student_id;
+    const fullStudent = students.find((s) => s.id === studentId) || student;
 
-    const templateType = defaultStatus === 'Late' ? 'late' : defaultStatus === 'Absent' ? 'absent' : 'general';
+    setWhatsAppTarget(fullStudent);
+    const rawPhone = fullStudent.whatsapp_number || fullStudent.guardian_contact || student.whatsapp_number || student.guardian_contact || '';
+    setWhatsAppPhone(rawPhone);
+
+    const guardian = fullStudent.guardian_name || student.guardian_name || 'Guardian';
+    setWhatsAppGuardianName(guardian);
+
+    const templateType = defaultStatus === 'Late' ? 'late' : defaultStatus === 'Absent' ? 'absent' : defaultStatus === 'Present' ? 'present' : 'general';
     setWhatsAppTemplate(templateType);
 
-    const schoolName = institution?.institution_name || 'School';
-    const sName = student.full_name || student.name || 'Student';
-    const cName = student.class_name ? `${student.class_name} (Section ${student.section || 'A'})` : '';
+    const schoolName = institution?.institution_name || 'ClassroomOS School';
+    const sName = fullStudent.full_name || student.full_name || fullStudent.name || student.name || 'Student';
+    const className = fullStudent.class_name || student.class_name || '';
+    const sectionName = fullStudent.section || student.section || 'A';
+    const rollNum = fullStudent.roll_number || student.roll_number || '';
     const dateStr = attendanceDate || getTodayDate();
+
+    const classDetails = className ? ` (Class ${className}, Section ${sectionName}${rollNum ? `, Roll #${rollNum}` : ''})` : '';
 
     let msg = '';
     if (templateType === 'absent') {
-      msg = `Dear ${student.guardian_name || 'Guardian'}, this is to notify you that ${sName} (${cName}) was marked ABSENT today (${dateStr}) at ${schoolName}. Please contact the school office if you have any questions.`;
+      msg = `Dear ${guardian}, this is an official attendance notice from ${schoolName}. Your child ${sName}${classDetails} was marked ABSENT today (${dateStr}). Please contact the school office if you have any questions or to submit an excuse note.`;
     } else if (templateType === 'late') {
-      msg = `Dear ${student.guardian_name || 'Guardian'}, this is to notify you that ${sName} (${cName}) arrived LATE to class today (${dateStr}) at ${schoolName}.`;
+      msg = `Dear ${guardian}, this is an official attendance notice from ${schoolName}. Your child ${sName}${classDetails} arrived LATE to class today (${dateStr}).`;
+    } else if (templateType === 'present') {
+      msg = `Dear ${guardian}, this is to inform you that your child ${sName}${classDetails} was marked PRESENT today (${dateStr}) at ${schoolName}.`;
     } else {
-      msg = `Dear ${student.guardian_name || 'Guardian'}, this is an official attendance notice regarding ${sName} (${cName}) from ${schoolName}.`;
+      msg = `Dear ${guardian}, this is an official attendance notice regarding ${sName}${classDetails} from ${schoolName}.`;
     }
     setWhatsAppMessageText(msg);
+    setCopiedWhatsAppText(false);
     setIsWhatsAppModalOpen(true);
   };
 
   const handleSelectWhatsAppTemplate = (type) => {
     setWhatsAppTemplate(type);
     if (!whatsAppTarget) return;
-    const schoolName = institution?.institution_name || 'School';
+    const schoolName = institution?.institution_name || 'ClassroomOS School';
     const sName = whatsAppTarget.full_name || whatsAppTarget.name || 'Student';
-    const cName = whatsAppTarget.class_name ? `${whatsAppTarget.class_name} (Section ${whatsAppTarget.section || 'A'})` : '';
+    const className = whatsAppTarget.class_name || '';
+    const sectionName = whatsAppTarget.section || 'A';
+    const rollNum = whatsAppTarget.roll_number || '';
     const dateStr = attendanceDate || getTodayDate();
+    const guardian = whatsAppGuardianName || whatsAppTarget.guardian_name || 'Guardian';
+
+    const classDetails = className ? ` (Class ${className}, Section ${sectionName}${rollNum ? `, Roll #${rollNum}` : ''})` : '';
 
     if (type === 'absent') {
-      setWhatsAppMessageText(`Dear ${whatsAppGuardianName || 'Guardian'}, this is to notify you that ${sName} (${cName}) was marked ABSENT today (${dateStr}) at ${schoolName}. Please contact the school office if you have any questions.`);
+      setWhatsAppMessageText(`Dear ${guardian}, this is an official attendance notice from ${schoolName}. Your child ${sName}${classDetails} was marked ABSENT today (${dateStr}). Please contact the school office if you have any questions or to submit an excuse note.`);
     } else if (type === 'late') {
-      setWhatsAppMessageText(`Dear ${whatsAppGuardianName || 'Guardian'}, this is to notify you that ${sName} (${cName}) arrived LATE to class today (${dateStr}) at ${schoolName}.`);
+      setWhatsAppMessageText(`Dear ${guardian}, this is an official attendance notice from ${schoolName}. Your child ${sName}${classDetails} arrived LATE to class today (${dateStr}).`);
+    } else if (type === 'present') {
+      setWhatsAppMessageText(`Dear ${guardian}, this is to inform you that your child ${sName}${classDetails} was marked PRESENT today (${dateStr}) at ${schoolName}.`);
     } else if (type === 'general') {
-      setWhatsAppMessageText(`Dear ${whatsAppGuardianName || 'Guardian'}, this is an official attendance notice regarding ${sName} (${cName}) from ${schoolName}.`);
+      setWhatsAppMessageText(`Dear ${guardian}, this is an official attendance notice regarding ${sName}${classDetails} from ${schoolName}.`);
+    }
+  };
+
+  const handleCopyWhatsAppText = async () => {
+    if (!whatsAppMessageText) return;
+    try {
+      await navigator.clipboard.writeText(whatsAppMessageText);
+      setCopiedWhatsAppText(true);
+      showToast('Message text copied to clipboard!');
+      setTimeout(() => setCopiedWhatsAppText(false), 2500);
+    } catch {
+      showToast('Could not copy to clipboard. Please select and copy manually.', 'error');
     }
   };
 
@@ -661,9 +698,15 @@ export default function App() {
       showToast('Recipient phone number is required to send WhatsApp message.', 'error');
       return;
     }
-    const cleanPhone = whatsAppPhone.replace(/[^0-9+]/g, '');
-    if (cleanPhone.length < 7) {
-      showToast('Invalid phone number format. Please check international dialing code.', 'error');
+
+    const phoneMeta = normalizePhoneNumber(whatsAppPhone);
+    if (!phoneMeta.isValid) {
+      showToast(phoneMeta.error || 'Invalid phone number format. Please check dialing code.', 'error');
+      return;
+    }
+
+    if (!whatsAppMessageText.trim()) {
+      showToast('Notification message text cannot be empty.', 'error');
       return;
     }
 
@@ -671,18 +714,18 @@ export default function App() {
     try {
       await whatsappApi.logManualDispatch({
         student_id: whatsAppTarget?.id || whatsAppTarget?.student_id,
-        recipient_phone: cleanPhone,
+        recipient_phone: phoneMeta.displayFormat || whatsAppPhone,
         recipient_name: whatsAppGuardianName,
         message_type: whatsAppTemplate,
         message_text: whatsAppMessageText
       });
-      const encodedMsg = encodeURIComponent(whatsAppMessageText);
-      const url = `https://wa.me/${cleanPhone.replace('+', '')}?text=${encodedMsg}`;
+
+      const url = buildWhatsAppClickToChatUrl(phoneMeta.normalized, whatsAppMessageText);
       window.open(url, '_blank', 'noopener,noreferrer');
-      showToast(`WhatsApp launched for ${whatsAppTarget?.full_name || 'Guardian'}. Please review and send in WhatsApp.`);
+      showToast(`WhatsApp opened in a new tab. Please press Send inside WhatsApp to deliver the notice to ${whatsAppGuardianName || 'the guardian'}.`);
       setIsWhatsAppModalOpen(false);
     } catch (err) {
-      showToast(`Notification log error: ${err.message}`);
+      showToast(`Notification log error: ${err.message}`, 'error');
     } finally {
       setIsDispatchingWhatsApp(false);
     }
@@ -3027,102 +3070,163 @@ export default function App() {
       <Modal
         isOpen={isWhatsAppModalOpen}
         onClose={() => setIsWhatsAppModalOpen(false)}
-        title={`Send WhatsApp Notification: ${whatsAppTarget?.full_name || whatsAppTarget?.name || 'Student'}`}
+        title={`WhatsApp Attendance Notice: ${whatsAppTarget?.full_name || whatsAppTarget?.name || 'Student'}`}
       >
-        <form onSubmit={handleLaunchWhatsApp}>
-          <div style={{ padding: '0.75rem 1rem', backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 'var(--radius-sm)', marginBottom: '1.25rem', fontSize: '0.85rem', color: '#1E40AF', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <MessageSquare size={18} style={{ flexShrink: 0 }} />
-            <span>ClassroomOS prepared notification — launches WhatsApp directly with your customized message ready to send.</span>
-          </div>
+        {(() => {
+          const phoneMeta = normalizePhoneNumber(whatsAppPhone);
+          return (
+            <form onSubmit={handleLaunchWhatsApp}>
+              {/* How it works guidance banner */}
+              <div style={{ padding: '0.85rem 1rem', backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 'var(--radius-sm)', marginBottom: '1.25rem', fontSize: '0.85rem', color: '#1E40AF' }}>
+                <div style={{ display: 'flex', gap: '0.45rem', alignItems: 'center', fontWeight: 700, marginBottom: '0.35rem', color: '#1D4ED8' }}>
+                  <MessageSquare size={17} style={{ flexShrink: 0 }} />
+                  <span>Manual WhatsApp Messaging Workflow</span>
+                </div>
+                <div style={{ fontSize: '0.82rem', lineHeight: 1.45, color: '#1E3A8A' }}>
+                  <p style={{ margin: '0 0 0.35rem 0' }}>
+                    <strong>Step 1:</strong> Clicking <strong>Open in WhatsApp</strong> opens WhatsApp with this exact message pre-typed into the guardian's chat window.
+                  </p>
+                  <p style={{ margin: 0 }}>
+                    <strong>Step 2:</strong> <strong>You must press the Send button (or Enter) inside WhatsApp</strong> to deliver the message. Web browsers cannot send messages automatically without your manual dispatch.
+                  </p>
+                </div>
+              </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-            <div className="form-group">
-              <label className="form-label">Guardian Contact Name</label>
-              <input
-                type="text"
-                className="form-input"
-                value={whatsAppGuardianName}
-                onChange={(e) => setWhatsAppGuardianName(e.target.value)}
-                placeholder="e.g. Guardian Name"
-              />
-            </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Guardian Contact Name</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={whatsAppGuardianName}
+                    onChange={(e) => setWhatsAppGuardianName(e.target.value)}
+                    placeholder="e.g. Guardian Name"
+                  />
+                </div>
 
-            <div className="form-group">
-              <label className="form-label">WhatsApp Number *</label>
-              <input
-                type="text"
-                required
-                className="form-input"
-                value={whatsAppPhone}
-                onChange={(e) => setWhatsAppPhone(e.target.value)}
-                placeholder="+1 (555) 000-0000"
-              />
-            </div>
-          </div>
+                <div className="form-group">
+                  <label className="form-label">WhatsApp Number *</label>
+                  <input
+                    type="text"
+                    required
+                    className="form-input"
+                    value={whatsAppPhone}
+                    onChange={(e) => setWhatsAppPhone(e.target.value)}
+                    placeholder="03001234567 or +923001234567"
+                    style={{ borderColor: whatsAppPhone.trim() ? (phoneMeta.isValid ? '#059669' : '#DC2626') : undefined }}
+                  />
+                  {whatsAppPhone.trim() ? (
+                    phoneMeta.isValid ? (
+                      <div style={{ fontSize: '0.75rem', color: '#059669', display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.35rem', fontWeight: 600 }}>
+                        <CheckCircle2 size={13} />
+                        <span>{phoneMeta.country} &bull; Formatted: {phoneMeta.displayFormat}</span>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '0.75rem', color: '#DC2626', display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.35rem' }}>
+                        <AlertCircle size={13} />
+                        <span>{phoneMeta.error}</span>
+                      </div>
+                    )
+                  ) : (
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                      Enter local Pakistani mobile (03xx) or international (+92 / +1)
+                    </div>
+                  )}
+                </div>
+              </div>
 
-          <div className="form-group" style={{ marginBottom: '1rem' }}>
-            <label className="form-label">Select Notice Template</label>
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                className={`btn btn-sm ${whatsAppTemplate === 'absent' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => handleSelectWhatsAppTemplate('absent')}
-                style={{ backgroundColor: whatsAppTemplate === 'absent' ? '#1E3A8A' : undefined }}
-              >
-                Absent Today
-              </button>
-              <button
-                type="button"
-                className={`btn btn-sm ${whatsAppTemplate === 'late' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => handleSelectWhatsAppTemplate('late')}
-                style={{ backgroundColor: whatsAppTemplate === 'late' ? '#1E3A8A' : undefined }}
-              >
-                Late Arrival
-              </button>
-              <button
-                type="button"
-                className={`btn btn-sm ${whatsAppTemplate === 'general' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => handleSelectWhatsAppTemplate('general')}
-                style={{ backgroundColor: whatsAppTemplate === 'general' ? '#1E3A8A' : undefined }}
-              >
-                General Notice
-              </button>
-            </div>
-          </div>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label className="form-label">Select Notice Template</label>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${whatsAppTemplate === 'absent' ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => handleSelectWhatsAppTemplate('absent')}
+                    style={{ backgroundColor: whatsAppTemplate === 'absent' ? '#1E3A8A' : undefined }}
+                  >
+                    Absent Notice
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${whatsAppTemplate === 'late' ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => handleSelectWhatsAppTemplate('late')}
+                    style={{ backgroundColor: whatsAppTemplate === 'late' ? '#1E3A8A' : undefined }}
+                  >
+                    Late Arrival
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${whatsAppTemplate === 'present' ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => handleSelectWhatsAppTemplate('present')}
+                    style={{ backgroundColor: whatsAppTemplate === 'present' ? '#1E3A8A' : undefined }}
+                  >
+                    Present Notice
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${whatsAppTemplate === 'general' ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => handleSelectWhatsAppTemplate('general')}
+                    style={{ backgroundColor: whatsAppTemplate === 'general' ? '#1E3A8A' : undefined }}
+                  >
+                    General Notice
+                  </button>
+                </div>
+              </div>
 
-          <div className="form-group" style={{ marginBottom: '1.25rem' }}>
-            <label className="form-label">Notification Message Preview (Editable)</label>
-            <textarea
-              className="form-textarea"
-              rows="4"
-              required
-              value={whatsAppMessageText}
-              onChange={(e) => setWhatsAppMessageText(e.target.value)}
-            />
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              Recipient will receive this exact text when you confirm and send in WhatsApp.
-            </span>
-          </div>
+              <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                  <label className="form-label" style={{ margin: 0 }}>Notification Message Preview (Editable)</label>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    {whatsAppMessageText.length} characters
+                  </span>
+                </div>
+                <textarea
+                  className="form-textarea"
+                  rows="4"
+                  required
+                  value={whatsAppMessageText}
+                  onChange={(e) => setWhatsAppMessageText(e.target.value)}
+                  style={{ width: '100%', resize: 'vertical' }}
+                />
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  This exact text will be pre-filled into WhatsApp chat ready for you to send.
+                </span>
+              </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => setIsWhatsAppModalOpen(false)}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={isDispatchingWhatsApp}
-              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: '#059669', borderColor: '#059669' }}
-            >
-              <Send size={15} />
-              <span>{isDispatchingWhatsApp ? 'Launching...' : 'Launch WhatsApp & Log'}</span>
-            </button>
-          </div>
-        </form>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleCopyWhatsAppText}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                  title="Copy message text to clipboard"
+                >
+                  {copiedWhatsAppText ? <CheckCheck size={14} color="#059669" /> : <Copy size={14} />}
+                  <span>{copiedWhatsAppText ? 'Copied to Clipboard!' : 'Copy Text'}</span>
+                </button>
+
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setIsWhatsAppModalOpen(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={isDispatchingWhatsApp || !phoneMeta.isValid || !whatsAppMessageText.trim()}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', backgroundColor: '#059669', borderColor: '#059669' }}
+                  >
+                    <ExternalLink size={15} />
+                    <span>{isDispatchingWhatsApp ? 'Opening...' : 'Open in WhatsApp ↗'}</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          );
+        })()}
       </Modal>
     </div>
   );
